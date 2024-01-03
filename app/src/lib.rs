@@ -111,7 +111,7 @@ impl App {
         let seconds = (millis % MS_PER_MIN) / MS_PER_SEC;
         let milliseconds = millis % MS_PER_SEC;
 
-        let mut buffer = [0u8; 64];
+        let mut buffer: [u8; 64] = [0x20; 64];
         let mut w = WriteTo::new(&mut buffer);
 
         w.write_str(if is_active { "> " } else { "  " } ).unwrap();

@@ -1,6 +1,6 @@
 [workspace]
 
-members = ["app"]
+members = ["app", "x86_64"]
 
 [package]
 name = "rust_app"
