@@ -24,36 +24,40 @@ pub extern "C" fn _start() -> ! {
     let mut writer = Writer::init();
     let timer = Timer::init();
 
-    writeln!(writer, "Hello Waku-waku mi12cp World {}", 42).unwrap();
-    writeln!(writer, "").unwrap();
-    writeln!(writer, "ABCDEFGHIJKLMNOPQRSTUVWXYZ").unwrap();
-    writeln!(writer, "abcdefghijklmnopqrstuvwxyz").unwrap();
-    writeln!(writer, "1234567890").unwrap();
+    // writeln!(writer, "Hello Waku-waku mi12cp World {}", 42).unwrap();
+    // writeln!(writer, "").unwrap();
+    // writeln!(writer, "ABCDEFGHIJKLMNOPQRSTUVWXYZ").unwrap();
+    // writeln!(writer, "abcdefghijklmnopqrstuvwxyz").unwrap();
+    // writeln!(writer, "1234567890").unwrap();
+    //
 
-
+    let mut i: u64 = 0;
     loop {
-        let c = keyboard.get_char_blocking();
+        if i % 10000000 == 0 {
+            let maybe_char = keyboard.poll_char();
 
-        let app_elapsed_time = timer.get_elapsed_time_ms();
-        writeln!(writer, "time: {}", app_elapsed_time).unwrap();
+            let app_elapsed_time = timer.get_elapsed_time_ms();
+            // writeln!(writer, "time: {}", app_elapsed_time).unwrap();
 
-        match c {
-            'a' => app.on_key_down(Key::AllowLeft, app_elapsed_time as u128),
-            's' => app.on_key_down(Key::AllowDown, app_elapsed_time as u128),
-            'd' => app.on_key_down(Key::AllowRight, app_elapsed_time as u128),
-            'w' => app.on_key_down(Key::AllowUp, app_elapsed_time as u128),
-            _ => ()
+            match maybe_char {
+                Some('a') => app.on_key_down(Key::AllowLeft, app_elapsed_time as u128),
+                Some('s') => app.on_key_down(Key::AllowDown, app_elapsed_time as u128),
+                Some('d') => app.on_key_down(Key::AllowRight, app_elapsed_time as u128),
+                Some('w') => app.on_key_down(Key::AllowUp, app_elapsed_time as u128),
+                _ => ()
+            }
+
+            let total_durations = app.format_total_durations_long(app_elapsed_time as u128);
+
+            writer.clear_all();
+            writeln!(writer, "{}\n{}\n{}\n{}",
+                     str::from_utf8(&total_durations[0]).unwrap(),
+                     str::from_utf8(&total_durations[1]).unwrap(),
+                     str::from_utf8(&total_durations[2]).unwrap(),
+                     str::from_utf8(&total_durations[3]).unwrap(),
+            ).unwrap();
         }
-
-        let total_durations = app.format_total_durations_long(app_elapsed_time as u128);
-
-        writer.clear_all();
-        writeln!(writer, "{}\n{}\n{}\n{}",
-                 str::from_utf8(&total_durations[0]).unwrap(),
-                 str::from_utf8(&total_durations[1]).unwrap(),
-                 str::from_utf8(&total_durations[2]).unwrap(),
-                 str::from_utf8(&total_durations[3]).unwrap(),
-        ).unwrap();
+        i += 1;
     }
 }
 

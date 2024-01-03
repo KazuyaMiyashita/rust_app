@@ -17,7 +17,7 @@ impl PCKeyboard {
         }
     }
 
-    fn poll_char(&mut self) -> Option<char> {
+    pub fn poll_char(&mut self) -> Option<char> {
         let b: u8 = unsafe { self.port.read() };
         let event = self.kbd.add_byte(b).ok()??;
 
@@ -39,6 +39,7 @@ impl PCKeyboard {
         }
     }
 
+    #[allow(unused)]
     pub fn get_char_blocking(&mut self) -> char {
         loop {
             if let Some(ch) = self.poll_char() {
