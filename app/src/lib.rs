@@ -1,5 +1,10 @@
 #![no_std]
 
+mod write_to;
+
+use crate::write_to::WriteTo;
+use core::fmt::Write;
+
 pub enum Key {
     AllowUp,
     AllowDown,
@@ -87,6 +92,54 @@ impl App {
             self.counters[1].get_total_duration(app_elapsed_time),
             self.counters[2].get_total_duration(app_elapsed_time),
             self.counters[3].get_total_duration(app_elapsed_time)
+        ]
+    }
+
+    /** 経過時間を64文字までのascii文字を返す */
+    fn format_total_duration_long(counter: &Counter, app_elapsed_time: u128, is_active: bool) -> [u8; 64] {
+
+        let millis = counter.get_total_duration(app_elapsed_time);
+
+        const MS_PER_SEC: u128 = 1000;
+        const MS_PER_MIN: u128 = MS_PER_SEC * 60;
+        const MS_PER_HOUR: u128 = MS_PER_MIN * 60;
+        const MS_PER_DAY: u128 = MS_PER_HOUR * 24;
+
+        let days = millis / MS_PER_DAY;
+        let hours = (millis % MS_PER_DAY) / MS_PER_HOUR;
+        let minutes = (millis % MS_PER_HOUR) / MS_PER_MIN;
+        let seconds = (millis % MS_PER_MIN) / MS_PER_SEC;
+        let milliseconds = millis % MS_PER_SEC;
+
+        let mut buffer = [0u8; 64];
+        let mut w = WriteTo::new(&mut buffer);
+
+        w.write_str(if is_active { "> " } else { "  " } ).unwrap();
+
+        if days > 0 {
+            w.write_fmt(format_args!("{} days, ", days)).unwrap()
+        }
+        if hours > 0 {
+            w.write_fmt(format_args!("{} hours, ", hours)).unwrap()
+        }
+        if minutes > 0 {
+            w.write_fmt(format_args!("{} minutes, ", minutes)).unwrap()
+        }
+        if seconds > 0 {
+            w.write_fmt(format_args!("{} seconds, ", seconds)).unwrap()
+        }
+        w.write_fmt(format_args!("{} milliseconds", milliseconds)).unwrap();
+
+        buffer
+    }
+
+    /** 4つのカウンターの内容を返す */
+    pub fn format_total_durations_long(&self, app_elapsed_time: u128) -> [[u8; 64]; 4] {
+        [
+            Self::format_total_duration_long(&self.counters[0], app_elapsed_time, self.cursor == 0),
+            Self::format_total_duration_long(&self.counters[1], app_elapsed_time, self.cursor == 1),
+            Self::format_total_duration_long(&self.counters[2], app_elapsed_time, self.cursor == 2),
+            Self::format_total_duration_long(&self.counters[3], app_elapsed_time, self.cursor == 3),
         ]
     }
 }

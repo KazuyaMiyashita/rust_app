@@ -4,6 +4,7 @@ use std::{io, thread};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use std::io::{Read, Write, Stdin};
+use std::str;
 use std::process;
 use termios::{Termios, TCSANOW, ECHO, ICANON, tcsetattr};
 use app::{App, Key};
@@ -36,7 +37,7 @@ fn main() {
                     key_app.lock().unwrap().on_key_down(key, app_elapsed_time)
                 },
                 Err(None) => process::exit(0),
-                Err(Some(())) => break
+                Err(Some(())) => continue
             }
         }
     });
@@ -56,7 +57,15 @@ fn main() {
             let app_elapsed_time = start_time.elapsed().as_millis();
             // Clear the terminal using escape sequence
             print!("\x1B[2J\x1B[H"); // ESC[2JESC[H
-            println!("{}", app_to_string(&display_app.lock().unwrap(), app_elapsed_time));
+
+            let total_durations = &display_app.lock().unwrap().format_total_durations_long(app_elapsed_time);
+
+            println!("{}\n{}\n{}\n{}",
+                     str::from_utf8(&total_durations[0]).unwrap(),
+                     str::from_utf8(&total_durations[1]).unwrap(),
+                     str::from_utf8(&total_durations[2]).unwrap(),
+                     str::from_utf8(&total_durations[3]).unwrap(),
+            );
         }
     });
 
@@ -88,56 +97,4 @@ fn get_key_input_blocking(reader: &mut Stdin) -> Result<Key, Option<()>> {
             _ => Err(Some(())),
         }
     } else { Err(Some(())) }
-}
-
-fn app_to_string(app: &App, app_elapsed_time: u128) -> String {
-    let arrows = [
-        if app.cursor == 0 { "> " } else { "  " },
-        if app.cursor == 1 { "> " } else { "  " },
-        if app.cursor == 2 { "> " } else { "  " },
-        if app.cursor == 3 { "> " } else { "  " },
-    ];
-    let times = app.elapsed_times_ms(app_elapsed_time);
-    format!("{}{}\n{}{}\n{}{}\n{}{}",
-            arrows[0],
-            format_duration(times[0]),
-            arrows[1],
-            format_duration(times[1]),
-            arrows[2],
-            format_duration(times[2]),
-            arrows[3],
-            format_duration(times[3]),
-    )
-}
-
-fn format_duration(millis: u128) -> String {
-    const MS_PER_SEC: u128 = 1000;
-    const MS_PER_MIN: u128 = MS_PER_SEC * 60;
-    const MS_PER_HOUR: u128 = MS_PER_MIN * 60;
-    const MS_PER_DAY: u128 = MS_PER_HOUR * 24;
-
-    let days = millis / MS_PER_DAY;
-    let hours = (millis % MS_PER_DAY) / MS_PER_HOUR;
-    let minutes = (millis % MS_PER_HOUR) / MS_PER_MIN;
-    let seconds = (millis % MS_PER_MIN) / MS_PER_SEC;
-    let milliseconds = millis % MS_PER_SEC;
-
-    let mut result = String::new();
-
-    if days > 0 {
-        result.push_str(&format!("{} days, ", days));
-    }
-    if hours > 0 {
-        result.push_str(&format!("{} hours, ", hours));
-    }
-    if minutes > 0 {
-        result.push_str(&format!("{} minutes, ", minutes));
-    }
-    if seconds > 0 {
-        result.push_str(&format!("{} seconds, ", seconds));
-    }
-
-    result.push_str(&format!("{} milliseconds", milliseconds));
-
-    result
 }
