@@ -1,5 +1,3 @@
-mod app;
-
 use std::{io, process};
 use app::{App, Key};
 
@@ -15,7 +13,7 @@ q を入力すると終了するよ
     let mut app = App::init();
 
     loop {
-        println!("{}", app.to_string());
+        println!("{}", app_to_string(&app));
 
         let mut line = String::new();
         io::stdin().read_line(&mut line).unwrap();
@@ -30,4 +28,15 @@ q を入力すると終了するよ
         }
     }
 
+}
+
+fn app_to_string(app: &App) -> String {
+    let pad = " ".repeat(3 + app.cursor * 5);
+    format!("[{:03}, {:03}, {:03}, {:03}]\n{}^",
+            app.nums[0],
+            app.nums[1],
+            app.nums[2],
+            app.nums[3],
+            pad
+    )
 }

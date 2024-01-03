@@ -1,3 +1,5 @@
+#![no_std]
+
 pub enum Key {
     AllowUp,
     AllowDown,
@@ -6,8 +8,8 @@ pub enum Key {
 }
 
 pub struct App {
-    nums: [u8; 4],
-    cursor: usize,
+    pub nums: [u8; 4],
+    pub cursor: usize,
 }
 
 impl App {
@@ -43,14 +45,4 @@ impl App {
         }
     }
 
-    pub fn to_string(&self) -> String {
-        let pad = " ".repeat(3 + self.cursor * 5);
-        format!("[{:03}, {:03}, {:03}, {:03}]\n{}^",
-                self.nums[0],
-                self.nums[1],
-                self.nums[2],
-                self.nums[3],
-                pad
-        )
-    }
 }
