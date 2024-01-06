@@ -12,12 +12,12 @@ use panic_probe as _;
 
 // Provide an alias for our BSP so we can switch targets quickly.
 // Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
-use rp_pico as bsp;
+use rp2040_hal as bsp;
 // use sparkfun_pro_micro_rp2040 as bsp;
 
-use bsp::hal::{
+use bsp::{
     clocks::{init_clocks_and_plls, Clock},
-    gpio::{FunctionI2C, Pin},
+    gpio::{FunctionI2C, Pin, Pins},
     pac,
     sio::Sio,
     watchdog::Watchdog,
@@ -52,24 +52,19 @@ fn main() -> ! {
 
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
-    let pins = bsp::Pins::new(
+    let pins = Pins::new(
         pac.IO_BANK0,
         pac.PADS_BANK0,
         sio.gpio_bank0,
         &mut pac.RESETS,
     );
 
-    // This is the correct pin on the Raspberry Pico board. On other boards, even if they have an
-    // on-board LED, it might need to be changed.
-    // Notably, on the Pico W, the LED is not connected to any of the RP2040 GPIOs but to the cyw43 module instead. If you have
-    // a Pico W and want to toggle a LED with a simple GPIO output pin, you can connect an external
-    // LED to one of the GPIO pins, and reference that pin here.
-    let mut led_pin = pins.led.into_push_pull_output(); // 25番
+    let mut led_pin = pins.gpio25.into_push_pull_output(); // 25番がpicoだとLED
 
-    let button_0 = pins.gpio18.into_pull_down_input();
-    let button_1 = pins.gpio19.into_pull_down_input();
-    let button_2 = pins.gpio20.into_pull_down_input();
-    let button_3 = pins.gpio21.into_pull_down_input();
+    let _button_0 = pins.gpio18.into_pull_down_input();
+    let _button_1 = pins.gpio19.into_pull_down_input();
+    let _button_2 = pins.gpio20.into_pull_down_input();
+    let _button_3 = pins.gpio21.into_pull_down_input();
 
     let sda_pin: Pin<_, FunctionI2C, _> = pins.gpio16.into_function();
     let scl_pin: Pin<_, FunctionI2C, _> = pins.gpio17.into_function();
@@ -85,7 +80,7 @@ fn main() -> ! {
 
 
     info!("on!");
-    button_3.is_high().unwrap();
+    _button_3.is_high().unwrap();
     led_pin.set_high().unwrap();
 
     // for b in bytes {

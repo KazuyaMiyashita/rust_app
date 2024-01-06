@@ -66,25 +66,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "crc-any"
-version = "2.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c01a5e1f881f6fb6099a7bdf949e946719fd4f1fefa56264890574febf0eb6d0"
-dependencies = [
- "debug-helper",
-]
-
-[[package]]
 name = "critical-section"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7059fff8937831a9ae6f0fe4d658ffabf58f2ca96aa9dec1c889f936f705f216"
-
-[[package]]
-name = "debug-helper"
-version = "0.3.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f578e8e2c440e7297e008bb5486a3a8a194775224bbc23729b0dbdfaeebf162e"
 
 [[package]]
 name = "defmt"
@@ -327,28 +312,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
-name = "rp-pico"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6341771e6f8e5d130b2b3cbc23435b7847761adf198af09f4b2a60407d43bd56"
-dependencies = [
- "cortex-m-rt",
- "fugit",
- "rp2040-boot2",
- "rp2040-hal",
- "usb-device",
-]
-
-[[package]]
-name = "rp2040-boot2"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c92f344f63f950ee36cf4080050e4dce850839b9175da38f9d2ffb69b4dbb21"
-dependencies = [
- "crc-any",
-]
-
-[[package]]
 name = "rp2040-hal"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -408,7 +371,7 @@ dependencies = [
  "embedded-hal",
  "fugit",
  "panic-probe",
- "rp-pico",
+ "rp2040-hal",
 ]
 
 [[package]]
