@@ -1,100 +1,78 @@
-extern crate termios;
+//! Blinks the LED on a Pico board
+//!
+//! This will blink an LED attached to GP25, which is the pin the Pico uses for the on-board LED.
+#![no_std]
+#![no_main]
 
-use std::{io, thread};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
-use std::io::{Read, Write, Stdin};
-use std::str;
-use std::process;
-use termios::{Termios, TCSANOW, ECHO, ICANON, tcsetattr};
-use app::{App, Key};
+use bsp::entry;
+use defmt::*;
+use defmt_rtt as _;
+use embedded_hal::digital::v2::{InputPin, OutputPin};
+use panic_probe as _;
 
-fn main() {
-    let app = Arc::new(Mutex::new(App::init()));
+// Provide an alias for our BSP so we can switch targets quickly.
+// Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
+use rp_pico as bsp;
+// use sparkfun_pro_micro_rp2040 as bsp;
 
-    let stdin = 0; // couldn't get std::os::unix::io::FromRawFd to work
-    // on /dev/stdin or /dev/tty
-    let termios = Termios::from_fd(stdin).unwrap();
-    let mut new_termios = termios.clone();  // make a mutable copy of termios
-    // that we will modify
-    new_termios.c_lflag &= !(ICANON | ECHO); // no echo and canonical mode
-    tcsetattr(stdin, TCSANOW, &mut new_termios).unwrap();
+use bsp::hal::{
+    clocks::{init_clocks_and_plls, Clock},
+    pac,
+    sio::Sio,
+    watchdog::Watchdog,
+};
 
-    let stdout = io::stdout();
-    let mut reader = io::stdin();
+#[entry]
+fn main() -> ! {
+    info!("Program start");
+    let mut pac = pac::Peripherals::take().unwrap();
+    let core = pac::CorePeripherals::take().unwrap();
+    let mut watchdog = Watchdog::new(pac.WATCHDOG);
+    let sio = Sio::new(pac.SIO);
 
-    let start_time = Instant::now();
+    // External high-speed crystal on the pico board is 12Mhz
+    let external_xtal_freq_hz = 12_000_000u32;
+    let clocks = init_clocks_and_plls(
+        external_xtal_freq_hz,
+        pac.XOSC,
+        pac.CLOCKS,
+        pac.PLL_SYS,
+        pac.PLL_USB,
+        &mut pac.RESETS,
+        &mut watchdog,
+    )
+        .ok()
+        .unwrap();
 
-    println!("press arrow keys or press 'q' to exit");
-    stdout.lock().flush().unwrap();
+    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
-    let key_app = Arc::clone(&app);
-    let key_thread = thread::spawn(move || {
-        loop {
-            match get_key_input_blocking(&mut reader) {
-                Ok(key) => {
-                    let app_elapsed_time = start_time.elapsed().as_millis();
-                    key_app.lock().unwrap().on_key_down(key, app_elapsed_time)
-                },
-                Err(None) => process::exit(0),
-                Err(Some(())) => continue
-            }
+    let pins = bsp::Pins::new(
+        pac.IO_BANK0,
+        pac.PADS_BANK0,
+        sio.gpio_bank0,
+        &mut pac.RESETS,
+    );
+
+    // This is the correct pin on the Raspberry Pico board. On other boards, even if they have an
+    // on-board LED, it might need to be changed.
+    // Notably, on the Pico W, the LED is not connected to any of the RP2040 GPIOs but to the cyw43 module instead. If you have
+    // a Pico W and want to toggle a LED with a simple GPIO output pin, you can connect an external
+    // LED to one of the GPIO pins, and reference that pin here.
+    let mut led_pin = pins.led.into_push_pull_output(); // 25番
+
+    let button_0 = pins.gpio18.into_pull_down_input();
+    let button_1 = pins.gpio19.into_pull_down_input();
+    let button_2 = pins.gpio20.into_pull_down_input();
+    let button_3 = pins.gpio21.into_pull_down_input();
+
+
+    loop {
+        info!("on!");
+        if button_3.is_high().unwrap() {
+            led_pin.set_high().unwrap();
+        } else {
+            led_pin.set_low().unwrap();
         }
-    });
-
-    let display_app = Arc::clone(&app);
-    let display_thread = thread::spawn(move || {
-        let mut last_frame_time = Instant::now();
-
-        loop {
-            // 30fpsになるように制御
-            let elapsed = last_frame_time.elapsed();
-            if elapsed < Duration::from_millis(33) {
-                thread::sleep(Duration::from_millis(33) - elapsed);
-            }
-            last_frame_time = Instant::now();
-
-            let app_elapsed_time = start_time.elapsed().as_millis();
-            // Clear the terminal using escape sequence
-            print!("\x1B[2J\x1B[H"); // ESC[2JESC[H
-
-            let total_durations = &display_app.lock().unwrap().format_total_durations_long(app_elapsed_time);
-
-            println!("{}\n{}\n{}\n{}",
-                     str::from_utf8(&total_durations[0]).unwrap(),
-                     str::from_utf8(&total_durations[1]).unwrap(),
-                     str::from_utf8(&total_durations[2]).unwrap(),
-                     str::from_utf8(&total_durations[3]).unwrap(),
-            );
-        }
-    });
-
-    key_thread.join().unwrap();
-    display_thread.join().unwrap();
-
-    println!("finish");
-    tcsetattr(stdin, TCSANOW, &termios).unwrap();  // reset the stdin to
-    // original termios data
-}
-
-fn get_key_input_blocking(reader: &mut Stdin) -> Result<Key, Option<()>> {
-    let mut buf = [0u8; 3];
-    reader.read_exact(&mut buf[..1]).unwrap();
-
-    if buf[0] == b'q' { return Err(None); }
-
-    // Check if it's an escape sequence
-    if buf[0] == 27 {
-        // Read two more bytes to complete the escape sequence
-        reader.read_exact(&mut buf[1..]).unwrap();
-
-        // Process the escape sequence for arrow keys
-        match &buf[..] {
-            [27, 91, 65] => Ok(Key::AllowUp),
-            [27, 91, 66] => Ok(Key::AllowDown),
-            [27, 91, 67] => Ok(Key::AllowRight),
-            [27, 91, 68] => Ok(Key::AllowLeft),
-            _ => Err(Some(())),
-        }
-    } else { Err(Some(())) }
+        delay.delay_ms(10);
+    }
 }
