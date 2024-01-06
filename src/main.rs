@@ -17,10 +17,16 @@ use rp_pico as bsp;
 
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
+    gpio::{FunctionI2C, Pin},
     pac,
     sio::Sio,
     watchdog::Watchdog,
+    I2C,
 };
+
+use embedded_hal::blocking::i2c::Write;
+use fugit::RateExtU32;
+
 
 #[entry]
 fn main() -> ! {
@@ -65,14 +71,63 @@ fn main() -> ! {
     let button_2 = pins.gpio20.into_pull_down_input();
     let button_3 = pins.gpio21.into_pull_down_input();
 
+    let sda_pin: Pin<_, FunctionI2C, _> = pins.gpio16.into_function();
+    let scl_pin: Pin<_, FunctionI2C, _> = pins.gpio17.into_function();
+
+    let mut display = I2C::i2c0(
+        pac.I2C0,
+        sda_pin, // sda
+        scl_pin, // scl
+        400.kHz(),
+        &mut pac.RESETS,
+        &clocks.system_clock,
+    );
+
+
+    info!("on!");
+    button_3.is_high().unwrap();
+    led_pin.set_high().unwrap();
+
+    // for b in bytes {
+    //     display.write(0x3c, &b).unwrap();
+    // }
+    delay.delay_ms(40);
+
+    let commands: [u8; 18] = [
+        0x80, 0x38, //  FunctionSet : 2行表示
+        0x80, 0x39, //  FunctionSet : ISモード = 1
+        0x80, 0x14, //  IS=1:OSC周波数 1/4bias
+        0x80, 0x70, //  コントラスト
+        0x80, 0x56, //  booster-ON , Contrast-2
+        0x80, 0x6C, //  Follower control
+        0x80, 0x38, //  FunctionSet : ISモード = 0 0x38 // 1行表示 = 0x34
+        0x80, 0x0C, //  Display ON , Cursor ON = 0x0D // Cursor OFF = 0x0C
+        0x00, 0x01, //  Clear Display
+    ];
+    display.write(0x3e, &commands).unwrap();
+    delay.delay_ms(1);
+
+    // CONSOLE
+    display.write(0x3e, &[0x00, 0x38]).unwrap();
+    delay.delay_ms(1);
+
+    // CLS
+    display.write(0x3e, &[0x00, 0x01]).unwrap();
+    delay.delay_ms(1);
+
+    // DISP
+    display.write(0x3e, &[0x40, 0b0011_0000, 0b0011_0001, 0b0011_0010]).unwrap();
+    delay.delay_ms(1);
 
     loop {
-        info!("on!");
-        if button_3.is_high().unwrap() {
-            led_pin.set_high().unwrap();
-        } else {
-            led_pin.set_low().unwrap();
-        }
-        delay.delay_ms(10);
+
+        // if button_3.is_high().unwrap() {
+        //     led_pin.set_high().unwrap();
+        //     display.write(0x7c, &[1, 2, 3]).unwrap();
+        // } else {
+        //     led_pin.set_low().unwrap();
+        // }
+        cortex_m::asm::wfi();
     }
 }
+
