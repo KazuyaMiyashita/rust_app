@@ -66,6 +66,12 @@ fn main() -> ! {
     let _button_2 = pins.gpio20.into_pull_down_input();
     let _button_3 = pins.gpio21.into_pull_down_input();
 
+    let mut display_reset = pins.gpio22.into_push_pull_output(); // ?
+    display_reset.set_high().unwrap(); // ?
+
+    let mut display_led = pins.gpio23.into_push_pull_output(); // ?
+    display_led.set_high().unwrap();
+
     let sda_pin: Pin<_, FunctionI2C, _> = pins.gpio16.into_function();
     let scl_pin: Pin<_, FunctionI2C, _> = pins.gpio17.into_function();
 
@@ -87,6 +93,13 @@ fn main() -> ! {
     //     display.write(0x3c, &b).unwrap();
     // }
     delay.delay_ms(40);
+
+    display_reset.set_low().unwrap(); // リセット
+
+    delay.delay_ms(40);
+
+    display_reset.set_high().unwrap(); // 戻す
+
 
     let commands: [u8; 18] = [
         0x80, 0x38, //  FunctionSet : 2行表示
