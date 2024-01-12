@@ -22,7 +22,7 @@ use hal::pac;
 
 // Some traits we need
 use embedded_hal::blocking::delay::DelayMs;
-use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::digital::v2::{InputPin, OutputPin};
 
 /// The linker will place this boot block at the start of our program image. We
 /// need this to help the ROM bootloader get our code up and running.
@@ -75,12 +75,48 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
 
-    // Configure GPIO25 as an output
-    let mut led_pin = pins.gpio25.into_push_pull_output();
+    // // Configure GPIO25 as an output
+    // let mut led_pin = pins.gpio25.into_push_pull_output();
+    // loop {
+    //     led_pin.set_high().unwrap();
+    //     timer.delay_ms(500);
+    //     led_pin.set_low().unwrap();
+    //     timer.delay_ms(500);
+    // }
+
+    let mut pico_led = pins.gpio25.into_push_pull_output();
+    pico_led.set_high().unwrap();
+
+    let button_0 = pins.gpio18.into_pull_down_input();
+    let button_1 = pins.gpio19.into_pull_down_input();
+    let button_2 = pins.gpio20.into_pull_down_input();
+    let button_3 = pins.gpio21.into_pull_down_input();
+
+    let mut led_0 = pins.gpio13.into_push_pull_output();
+    let mut led_1 = pins.gpio12.into_push_pull_output();
+    let mut led_2 = pins.gpio11.into_push_pull_output();
+    let mut led_3 = pins.gpio10.into_push_pull_output();
+
     loop {
-        led_pin.set_high().unwrap();
-        timer.delay_ms(500);
-        led_pin.set_low().unwrap();
-        timer.delay_ms(500);
+        if button_0.is_high().unwrap() {
+            led_0.set_high().unwrap();
+        } else {
+            led_0.set_low().unwrap();
+        }
+        if button_1.is_high().unwrap() {
+            led_1.set_high().unwrap();
+        } else {
+            led_1.set_low().unwrap();
+        }
+        if button_2.is_high().unwrap() {
+            led_2.set_high().unwrap();
+        } else {
+            led_2.set_low().unwrap();
+        }
+        if button_3.is_high().unwrap() {
+            led_3.set_high().unwrap();
+        } else {
+            led_3.set_low().unwrap();
+        }
     }
 }
