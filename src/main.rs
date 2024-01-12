@@ -1,141 +1,86 @@
-//! Blinks the LED on a Pico board
+//! # GPIO 'Blinky' Example
 //!
-//! This will blink an LED attached to GP25, which is the pin the Pico uses for the on-board LED.
+//! This application demonstrates how to control a GPIO pin on the RP2040.
+//!
+//! It may need to be adapted to your particular board layout and/or pin assignment.
+//!
+//! See the `Cargo.toml` file for Copyright and license details.
+
 #![no_std]
 #![no_main]
 
-use bsp::entry;
-use defmt::*;
-use defmt_rtt as _;
-use embedded_hal::digital::v2::{InputPin, OutputPin};
-use panic_probe as _;
+// Ensure we halt the program on panic (if we don't mention this crate it won't
+// be linked)
+use panic_halt as _;
 
-// Provide an alias for our BSP so we can switch targets quickly.
-// Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
-use rp2040_hal as bsp;
-// use sparkfun_pro_micro_rp2040 as bsp;
+// Alias for our HAL crate
+use rp2040_hal as hal;
 
-use bsp::{
-    clocks::{init_clocks_and_plls, Clock},
-    gpio::{FunctionI2C, Pin, Pins},
-    pac,
-    sio::Sio,
-    watchdog::Watchdog,
-    I2C,
-};
+// A shorter alias for the Peripheral Access Crate, which provides low-level
+// register access
+use hal::pac;
 
-use embedded_hal::blocking::i2c::Write;
-use fugit::RateExtU32;
+// Some traits we need
+use embedded_hal::blocking::delay::DelayMs;
+use embedded_hal::digital::v2::OutputPin;
 
+/// The linker will place this boot block at the start of our program image. We
+/// need this to help the ROM bootloader get our code up and running.
+/// Note: This boot block is not necessary when using a rp-hal based BSP
+/// as the BSPs already perform this step.
+#[link_section = ".boot2"]
+#[used]
+pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GENERIC_03H;
 
-#[entry]
+/// External high-speed crystal on the Raspberry Pi Pico board is 12 MHz. Adjust
+/// if your board has a different frequency
+const XTAL_FREQ_HZ: u32 = 12_000_000u32;
+
+/// Entry point to our bare-metal application.
+///
+/// The `#[rp2040_hal::entry]` macro ensures the Cortex-M start-up code calls this function
+/// as soon as all global variables and the spinlock are initialised.
+///
+/// The function configures the RP2040 peripherals, then toggles a GPIO pin in
+/// an infinite loop. If there is an LED connected to that pin, it will blink.
+#[rp2040_hal::entry]
 fn main() -> ! {
-    info!("Program start");
+    // Grab our singleton objects
     let mut pac = pac::Peripherals::take().unwrap();
-    let core = pac::CorePeripherals::take().unwrap();
-    let mut watchdog = Watchdog::new(pac.WATCHDOG);
-    let sio = Sio::new(pac.SIO);
 
-    // External high-speed crystal on the pico board is 12Mhz
-    let external_xtal_freq_hz = 12_000_000u32;
-    let clocks = init_clocks_and_plls(
-        external_xtal_freq_hz,
+    // Set up the watchdog driver - needed by the clock setup code
+    let mut watchdog = hal::Watchdog::new(pac.WATCHDOG);
+
+    // Configure the clocks
+    let clocks = hal::clocks::init_clocks_and_plls(
+        XTAL_FREQ_HZ,
         pac.XOSC,
         pac.CLOCKS,
         pac.PLL_SYS,
         pac.PLL_USB,
         &mut pac.RESETS,
         &mut watchdog,
-    )
-        .ok()
-        .unwrap();
+    ).ok().unwrap();
 
-    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
+    let mut timer = rp2040_hal::Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
 
-    let pins = Pins::new(
+    // The single-cycle I/O block controls our GPIO pins
+    let sio = hal::Sio::new(pac.SIO);
+
+    // Set the pins to their default state
+    let pins = hal::gpio::Pins::new(
         pac.IO_BANK0,
         pac.PADS_BANK0,
         sio.gpio_bank0,
         &mut pac.RESETS,
     );
 
-    let mut led_pin = pins.gpio25.into_push_pull_output(); // 25番がpicoだとLED
-
-    let _button_0 = pins.gpio18.into_pull_down_input();
-    let _button_1 = pins.gpio19.into_pull_down_input();
-    let _button_2 = pins.gpio20.into_pull_down_input();
-    let _button_3 = pins.gpio21.into_pull_down_input();
-
-    let mut display_reset = pins.gpio22.into_push_pull_output(); // ?
-    display_reset.set_high().unwrap(); // ?
-
-    let mut display_led = pins.gpio23.into_push_pull_output(); // ?
-    display_led.set_high().unwrap();
-
-    let sda_pin: Pin<_, FunctionI2C, _> = pins.gpio16.into_function();
-    let scl_pin: Pin<_, FunctionI2C, _> = pins.gpio17.into_function();
-
-    let mut display = I2C::i2c0(
-        pac.I2C0,
-        sda_pin, // sda
-        scl_pin, // scl
-        400.kHz(),
-        &mut pac.RESETS,
-        &clocks.system_clock,
-    );
-
-
-    info!("on!");
-    _button_3.is_high().unwrap();
-    led_pin.set_high().unwrap();
-
-    // for b in bytes {
-    //     display.write(0x3c, &b).unwrap();
-    // }
-    delay.delay_ms(40);
-
-    display_reset.set_low().unwrap(); // リセット
-
-    delay.delay_ms(40);
-
-    display_reset.set_high().unwrap(); // 戻す
-
-
-    let commands: [u8; 18] = [
-        0x80, 0x38, //  FunctionSet : 2行表示
-        0x80, 0x39, //  FunctionSet : ISモード = 1
-        0x80, 0x14, //  IS=1:OSC周波数 1/4bias
-        0x80, 0x70, //  コントラスト
-        0x80, 0x56, //  booster-ON , Contrast-2
-        0x80, 0x6C, //  Follower control
-        0x80, 0x38, //  FunctionSet : ISモード = 0 0x38 // 1行表示 = 0x34
-        0x80, 0x0C, //  Display ON , Cursor ON = 0x0D // Cursor OFF = 0x0C
-        0x00, 0x01, //  Clear Display
-    ];
-    display.write(0x3e, &commands).unwrap();
-    delay.delay_ms(1);
-
-    // CONSOLE
-    display.write(0x3e, &[0x00, 0x38]).unwrap();
-    delay.delay_ms(1);
-
-    // CLS
-    display.write(0x3e, &[0x00, 0x01]).unwrap();
-    delay.delay_ms(1);
-
-    // DISP
-    display.write(0x3e, &[0x40, 0b0011_0000, 0b0011_0001, 0b0011_0010]).unwrap();
-    delay.delay_ms(1);
-
+    // Configure GPIO25 as an output
+    let mut led_pin = pins.gpio25.into_push_pull_output();
     loop {
-
-        // if button_3.is_high().unwrap() {
-        //     led_pin.set_high().unwrap();
-        //     display.write(0x7c, &[1, 2, 3]).unwrap();
-        // } else {
-        //     led_pin.set_low().unwrap();
-        // }
-        cortex_m::asm::wfi();
+        led_pin.set_high().unwrap();
+        timer.delay_ms(500);
+        led_pin.set_low().unwrap();
+        timer.delay_ms(500);
     }
 }
-
