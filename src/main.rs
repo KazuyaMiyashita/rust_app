@@ -19,10 +19,15 @@ use rp2040_hal as hal;
 // A shorter alias for the Peripheral Access Crate, which provides low-level
 // register access
 use hal::pac;
+use hal::gpio::{Pins, Pin, FunctionI2C, PullUp};
+use hal::I2C;
+use hal::fugit::RateExtU32;
+use hal::entry;
 
 // Some traits we need
 use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_hal::blocking::i2c::Write;
 
 /// The linker will place this boot block at the start of our program image. We
 /// need this to help the ROM bootloader get our code up and running.
@@ -43,7 +48,7 @@ const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 ///
 /// The function configures the RP2040 peripherals, then toggles a GPIO pin in
 /// an infinite loop. If there is an LED connected to that pin, it will blink.
-#[rp2040_hal::entry]
+#[entry]
 fn main() -> ! {
     // Grab our singleton objects
     let mut pac = pac::Peripherals::take().unwrap();
@@ -62,13 +67,13 @@ fn main() -> ! {
         &mut watchdog,
     ).ok().unwrap();
 
-    let mut timer = rp2040_hal::Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
+    let mut timer = hal::Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
 
     // The single-cycle I/O block controls our GPIO pins
     let sio = hal::Sio::new(pac.SIO);
 
     // Set the pins to their default state
-    let pins = hal::gpio::Pins::new(
+    let pins = Pins::new(
         pac.IO_BANK0,
         pac.PADS_BANK0,
         sio.gpio_bank0,
@@ -87,15 +92,33 @@ fn main() -> ! {
     let mut pico_led = pins.gpio25.into_push_pull_output();
     pico_led.set_high().unwrap();
 
+    // AE-RO2040用
     let button_0 = pins.gpio18.into_pull_down_input();
     let button_1 = pins.gpio19.into_pull_down_input();
     let button_2 = pins.gpio20.into_pull_down_input();
     let button_3 = pins.gpio21.into_pull_down_input();
 
-    let mut led_0 = pins.gpio13.into_push_pull_output();
-    let mut led_1 = pins.gpio12.into_push_pull_output();
-    let mut led_2 = pins.gpio11.into_push_pull_output();
-    let mut led_3 = pins.gpio10.into_push_pull_output();
+    let mut led_0 = pins.gpio14.into_push_pull_output();
+    let mut led_1 = pins.gpio13.into_push_pull_output();
+    let mut led_2 = pins.gpio12.into_push_pull_output();
+    let mut led_3 = pins.gpio11.into_push_pull_output();
+
+    // Configure two pins as being I²C, not GPIO
+    let sda_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio16.reconfigure();
+    let scl_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio17.reconfigure();
+    // Create the I²C drive, using the two pre-configured pins. This will fail
+    // at compile time if the pins are in the wrong mode, or if this I²C
+    // peripheral isn't available on these pins!
+    let mut i2c = I2C::i2c0(
+        pac.I2C0,
+        sda_pin,
+        scl_pin, // Try `not_an_scl_pin` here
+        400.kHz(),
+        &mut pac.RESETS,
+        &clocks.system_clock,
+    );
+    let display_i2c_addr: u8 = 0x3e;
+    // i2c.write(display_i2c_addr, &[0x00]).unwrap(); // ここでパニック。txの値が適当だから？
 
     loop {
         if button_0.is_high().unwrap() {
@@ -118,5 +141,7 @@ fn main() -> ! {
         } else {
             led_3.set_low().unwrap();
         }
+
+        timer.delay_ms(1);
     }
 }
