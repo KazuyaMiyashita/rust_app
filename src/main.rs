@@ -28,6 +28,7 @@ use hal::entry;
 use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use embedded_hal::blocking::i2c::Write;
+use rp2040_hal::i2c;
 
 /// The linker will place this boot block at the start of our program image. We
 /// need this to help the ROM bootloader get our code up and running.
@@ -118,30 +119,55 @@ fn main() -> ! {
         &clocks.system_clock,
     );
     let display_i2c_addr: u8 = 0x3e;
-    // i2c.write(display_i2c_addr, &[0x00]).unwrap(); // ここでパニック。txの値が適当だから？
+    match i2c.write(display_i2c_addr.clone(), &[0x00, 0x38, 0x39, 0x14, 0x70, 0x56, 0x6c]) {
+        Ok(()) => {
+            // led_0.set_high().unwrap();
+            ()
+        },
+        Err(e) => {
+            match e {
+                i2c::Error::Abort(_) => led_0.set_high().unwrap(), // これだった
+                i2c::Error::InvalidReadBufferLength => led_1.set_high().unwrap(),
+                i2c::Error::InvalidWriteBufferLength => led_2.set_high().unwrap(),
+                i2c::Error::AddressOutOfRange(_) => led_3.set_high().unwrap(),
+                i2c::Error::AddressReserved(_) => led_3.set_high().unwrap(),
+                _ => ()
+            }
+        }
+    }
+    timer.delay_ms(200);
+    match i2c.write(display_i2c_addr.clone(), &[0x00, 0x38, 0x0d, 0x01]) {
+        Ok(()) => {
+            // led_2.set_high().unwrap();
+            ()
+        },
+        Err(_) => {
+            // led_3.set_high().unwrap();
+            ()
+        }
+    }
+    // https://www.junk-works.science/specification-aqm0802/
 
     loop {
-        if button_0.is_high().unwrap() {
-            led_0.set_high().unwrap();
-        } else {
-            led_0.set_low().unwrap();
-        }
-        if button_1.is_high().unwrap() {
-            led_1.set_high().unwrap();
-        } else {
-            led_1.set_low().unwrap();
-        }
-        if button_2.is_high().unwrap() {
-            led_2.set_high().unwrap();
-        } else {
-            led_2.set_low().unwrap();
-        }
-        if button_3.is_high().unwrap() {
-            led_3.set_high().unwrap();
-        } else {
-            led_3.set_low().unwrap();
-        }
-
-        timer.delay_ms(1);
+        // if button_0.is_high().unwrap() {
+        //     led_0.set_high().unwrap();
+        // } else {
+        //     led_0.set_low().unwrap();
+        // }
+        // if button_1.is_high().unwrap() {
+        //     led_1.set_high().unwrap();
+        // } else {
+        //     led_1.set_low().unwrap();
+        // }
+        // if button_2.is_high().unwrap() {
+        //     led_2.set_high().unwrap();
+        // } else {
+        //     led_2.set_low().unwrap();
+        // }
+        // if button_3.is_high().unwrap() {
+        //     led_3.set_high().unwrap();
+        // } else {
+        //     led_3.set_low().unwrap();
+        // }
     }
 }
