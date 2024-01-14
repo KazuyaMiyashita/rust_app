@@ -87,68 +87,107 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
 
-    // // Configure GPIO25 as an output
-    // let mut led_pin = pins.gpio25.into_push_pull_output();
-    // loop {
-    //     led_pin.set_high().unwrap();
-    //     timer.delay_ms(500);
-    //     led_pin.set_low().unwrap();
-    //     timer.delay_ms(500);
-    // }
-
     let mut pico_led = pins.gpio25.into_push_pull_output();
     pico_led.set_high().unwrap();
 
-    let mut leds = LEDs::new (
-        pins.gpio13.into_push_pull_output(),
-        pins.gpio12.into_push_pull_output(),
-        pins.gpio11.into_push_pull_output(),
-        pins.gpio10.into_push_pull_output()
+    let mut leds = LEDs::new(
+        pins.gpio10.into_push_pull_output().into_dyn_pin(),
+        pins.gpio11.into_push_pull_output().into_dyn_pin(),
+        pins.gpio12.into_push_pull_output().into_dyn_pin(),
+        pins.gpio13.into_push_pull_output().into_dyn_pin(),
     );
 
-    for i in 0..=15 {
-        leds.light(i);
-        timer.delay_ms(1000);
-    }
+    // for i in 0..=15 {
+    //     leds.light(i);
+    //     timer.delay_ms(1000);
+    // }
 
-    // // Configure two pins as being I²C, not GPIO
-    // let sda_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio16.reconfigure();
-    // let scl_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio17.reconfigure();
-    // // Create the I²C drive, using the two pre-configured pins. This will fail
-    // // at compile time if the pins are in the wrong mode, or if this I²C
-    // // peripheral isn't available on these pins!
-    // let mut i2c = I2C::i2c0(
-    //     pac.I2C0,
-    //     sda_pin,
-    //     scl_pin, // Try `not_an_scl_pin` here
-    //     400.kHz(),
-    //     &mut pac.RESETS,
-    //     &clocks.system_clock,
-    // );
+    // Configure two pins as being I²C, not GPIO
+    let sda_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio16.reconfigure();
+    let scl_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio17.reconfigure();
+    // Create the I²C drive, using the two pre-configured pins. This will fail
+    // at compile time if the pins are in the wrong mode, or if this I²C
+    // peripheral isn't available on these pins!
+    let mut i2c = I2C::i2c0(
+        pac.I2C0,
+        sda_pin,
+        scl_pin, // Try `not_an_scl_pin` here
+        400.kHz(),
+        &mut pac.RESETS,
+        &clocks.system_clock,
+    );
+
+
+    // for i in 0..=15 {
+    //     leds.light(i).unwrap();
+    //     timer.delay_ms(500);
+    // }
+
+    // timer.delay_ms(500);
     //
+    // leds.light(1).unwrap();
+    // timer.delay_ms(500);
+    // leds.light(0).unwrap();
     // timer.delay_ms(500);
 
-    // leds._0.set_high().unwrap();
-    //
-    // use embedded_hal::blocking::i2c::Read;
-    // let mut readbuf: [u8; 1] = [0; 1];
-    // match i2c.read(0x3e, &mut readbuf) {
-    //     Ok(_) => leds._1.set_high().unwrap(),
-    //     Err(_) => leds._2.set_high().unwrap(), // ここになっている
+    use embedded_hal::blocking::i2c::Read;
+    let mut readbuf: [u8; 1] = [0; 1];
+    // 0x3e の時は　Abort(1)
+    // 0x00 の時は AddressReserved
+
+    for addr in 0..=127 {
+        match i2c.read(addr, &mut readbuf) {
+            Ok(_) => leds.light(2).unwrap(),
+            Err(e) => match e {
+                hal::i2c::Error::Abort(i) => leds.light(3).unwrap(),
+                hal::i2c::Error::InvalidReadBufferLength => leds.light(4).unwrap(),
+                hal::i2c::Error::InvalidWriteBufferLength => leds.light(5).unwrap(),
+                hal::i2c::Error::AddressOutOfRange(_) => leds.light(6).unwrap(),
+                hal::i2c::Error::AddressReserved(_) => leds.light(7).unwrap(),
+                _ => leds.light(8).unwrap(),
+            }
+        }
+        // leds.light((addr % 16) as u8).unwrap();
+        timer.delay_ms(125);
+        leds.light(0).unwrap();
+        timer.delay_ms(125);
+    }
+
+    timer.delay_ms(1000);
+
+    leds.light(15).unwrap();
+
+
+    // match i2c.read(0x10, &mut readbuf) {
+    //     Ok(_) => leds.light(2).unwrap(),
+    //     Err(e) => match e {
+    //         hal::i2c::Error::Abort(i) => leds.light(3).unwrap(),
+    //         hal::i2c::Error::InvalidReadBufferLength => leds.light(4).unwrap(),
+    //         hal::i2c::Error::InvalidWriteBufferLength => leds.light(5).unwrap(),
+    //         hal::i2c::Error::AddressOutOfRange(_) => leds.light(6).unwrap(),
+    //         hal::i2c::Error::AddressReserved(_) => leds.light(7).unwrap(),
+    //         _ => leds.light(8).unwrap(),
+    //     }
     // }
+    // timer.delay_ms(1000);
     //
+    //
+    // leds.light(1).unwrap();
+    // timer.delay_ms(500);
+    // leds.light(0).unwrap();
+    // timer.delay_ms(500);
+
     // let _i2c_addrs = i2c_scan(&mut i2c); // ここでパニックになっている？
-    // leds._3.set_high().unwrap();
-    //
-    // // if _i2c_addrs.contains(&true) {
-    // //     _led_2.set_high().unwrap();
-    // // }
-    //
-    // let mut display = DisplayAQM0802::init_blocking(i2c, &mut timer).unwrap();
-    //
-    // // _led_3.set_high().unwrap();
-    //
-    // display.print_blocking("hello").unwrap();
+
+    // if _i2c_addrs.contains(&true) {
+    //     _led_2.set_high().unwrap();
+    // }
+
+    let mut display = DisplayAQM0802::init_blocking(i2c, &mut timer).unwrap();
+
+    // _led_3.set_high().unwrap();
+
+    display.print_blocking("hello").unwrap();
 
     loop {
         // if button_0.is_high().unwrap() {

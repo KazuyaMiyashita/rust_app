@@ -9,7 +9,7 @@ edition = "2021"
 
 [dependencies]
 app = { path = "./app" }
-cortex-m = "0.7"
+cortex-m = "0.7.2"
 cortex-m-rt = "0.7"
 embedded-hal = { version = "0.2.5", features = ["unproven"] }
 
