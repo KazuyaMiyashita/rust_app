@@ -9,6 +9,9 @@
 #![no_std]
 #![no_main]
 
+mod display_aqm0802;
+mod i2c_scan;
+
 // Ensure we halt the program on panic (if we don't mention this crate it won't
 // be linked)
 use panic_halt as _;
@@ -25,10 +28,11 @@ use hal::fugit::RateExtU32;
 use hal::entry;
 
 // Some traits we need
-use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
-use embedded_hal::blocking::i2c::Write;
-use rp2040_hal::i2c;
+use embedded_hal::blocking::delay::DelayMs;
+
+use crate::display_aqm0802::DisplayAQM0802;
+use crate::i2c_scan::i2c_scan;
 
 /// The linker will place this boot block at the start of our program image. We
 /// need this to help the ROM bootloader get our code up and running.
@@ -94,15 +98,15 @@ fn main() -> ! {
     pico_led.set_high().unwrap();
 
     // AE-RO2040用
-    let button_0 = pins.gpio18.into_pull_down_input();
-    let button_1 = pins.gpio19.into_pull_down_input();
-    let button_2 = pins.gpio20.into_pull_down_input();
-    let button_3 = pins.gpio21.into_pull_down_input();
-
-    let mut led_0 = pins.gpio14.into_push_pull_output();
-    let mut led_1 = pins.gpio13.into_push_pull_output();
-    let mut led_2 = pins.gpio12.into_push_pull_output();
-    let mut led_3 = pins.gpio11.into_push_pull_output();
+    // let button_0 = pins.gpio18.into_pull_down_input();
+    // let button_1 = pins.gpio19.into_pull_down_input();
+    // let button_2 = pins.gpio20.into_pull_down_input();
+    // let button_3 = pins.gpio21.into_pull_down_input();
+    //
+    let mut _led_0 = pins.gpio13.into_push_pull_output();
+    let mut _led_1 = pins.gpio12.into_push_pull_output();
+    let mut _led_2 = pins.gpio11.into_push_pull_output();
+    let mut _led_3 = pins.gpio10.into_push_pull_output();
 
     // Configure two pins as being I²C, not GPIO
     let sda_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio16.reconfigure();
@@ -118,35 +122,24 @@ fn main() -> ! {
         &mut pac.RESETS,
         &clocks.system_clock,
     );
-    let display_i2c_addr: u8 = 0x3e;
-    match i2c.write(display_i2c_addr.clone(), &[0x00, 0x38, 0x39, 0x14, 0x70, 0x56, 0x6c]) {
-        Ok(()) => {
-            // led_0.set_high().unwrap();
-            ()
-        },
-        Err(e) => {
-            match e {
-                i2c::Error::Abort(_) => led_0.set_high().unwrap(), // これだった
-                i2c::Error::InvalidReadBufferLength => led_1.set_high().unwrap(),
-                i2c::Error::InvalidWriteBufferLength => led_2.set_high().unwrap(),
-                i2c::Error::AddressOutOfRange(_) => led_3.set_high().unwrap(),
-                i2c::Error::AddressReserved(_) => led_3.set_high().unwrap(),
-                _ => ()
-            }
-        }
+
+    timer.delay_ms(1000);
+
+    _led_0.set_high().unwrap();
+
+    let _i2c_addrs = i2c_scan(&mut i2c); // ここでパニックになっている？
+
+    _led_1.set_high().unwrap();
+
+    if _i2c_addrs.contains(&true) {
+        _led_2.set_high().unwrap();
     }
-    timer.delay_ms(200);
-    match i2c.write(display_i2c_addr.clone(), &[0x00, 0x38, 0x0d, 0x01]) {
-        Ok(()) => {
-            // led_2.set_high().unwrap();
-            ()
-        },
-        Err(_) => {
-            // led_3.set_high().unwrap();
-            ()
-        }
-    }
-    // https://www.junk-works.science/specification-aqm0802/
+
+    let mut display = DisplayAQM0802::init_blocking(i2c, &mut timer).unwrap();
+
+    _led_3.set_high().unwrap();
+
+    display.print_blocking("hello").unwrap();
 
     loop {
         // if button_0.is_high().unwrap() {
