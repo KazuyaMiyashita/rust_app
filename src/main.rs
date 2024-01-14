@@ -11,6 +11,7 @@
 
 mod display_aqm0802;
 mod i2c_scan;
+mod leds;
 
 // Ensure we halt the program on panic (if we don't mention this crate it won't
 // be linked)
@@ -33,6 +34,7 @@ use embedded_hal::blocking::delay::DelayMs;
 
 use crate::display_aqm0802::DisplayAQM0802;
 use crate::i2c_scan::i2c_scan;
+use crate::leds::LEDs;
 
 /// The linker will place this boot block at the start of our program image. We
 /// need this to help the ROM bootloader get our code up and running.
@@ -97,49 +99,56 @@ fn main() -> ! {
     let mut pico_led = pins.gpio25.into_push_pull_output();
     pico_led.set_high().unwrap();
 
-    // AE-RO2040用
-    // let button_0 = pins.gpio18.into_pull_down_input();
-    // let button_1 = pins.gpio19.into_pull_down_input();
-    // let button_2 = pins.gpio20.into_pull_down_input();
-    // let button_3 = pins.gpio21.into_pull_down_input();
-    //
-    let mut _led_0 = pins.gpio13.into_push_pull_output();
-    let mut _led_1 = pins.gpio12.into_push_pull_output();
-    let mut _led_2 = pins.gpio11.into_push_pull_output();
-    let mut _led_3 = pins.gpio10.into_push_pull_output();
-
-    // Configure two pins as being I²C, not GPIO
-    let sda_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio16.reconfigure();
-    let scl_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio17.reconfigure();
-    // Create the I²C drive, using the two pre-configured pins. This will fail
-    // at compile time if the pins are in the wrong mode, or if this I²C
-    // peripheral isn't available on these pins!
-    let mut i2c = I2C::i2c0(
-        pac.I2C0,
-        sda_pin,
-        scl_pin, // Try `not_an_scl_pin` here
-        400.kHz(),
-        &mut pac.RESETS,
-        &clocks.system_clock,
+    let mut leds = LEDs::new (
+        pins.gpio13.into_push_pull_output(),
+        pins.gpio12.into_push_pull_output(),
+        pins.gpio11.into_push_pull_output(),
+        pins.gpio10.into_push_pull_output()
     );
 
-    timer.delay_ms(1000);
-
-    _led_0.set_high().unwrap();
-
-    let _i2c_addrs = i2c_scan(&mut i2c); // ここでパニックになっている？
-
-    _led_1.set_high().unwrap();
-
-    if _i2c_addrs.contains(&true) {
-        _led_2.set_high().unwrap();
+    for i in 0..=15 {
+        leds.light(i);
+        timer.delay_ms(1000);
     }
 
-    let mut display = DisplayAQM0802::init_blocking(i2c, &mut timer).unwrap();
+    // // Configure two pins as being I²C, not GPIO
+    // let sda_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio16.reconfigure();
+    // let scl_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio17.reconfigure();
+    // // Create the I²C drive, using the two pre-configured pins. This will fail
+    // // at compile time if the pins are in the wrong mode, or if this I²C
+    // // peripheral isn't available on these pins!
+    // let mut i2c = I2C::i2c0(
+    //     pac.I2C0,
+    //     sda_pin,
+    //     scl_pin, // Try `not_an_scl_pin` here
+    //     400.kHz(),
+    //     &mut pac.RESETS,
+    //     &clocks.system_clock,
+    // );
+    //
+    // timer.delay_ms(500);
 
-    _led_3.set_high().unwrap();
-
-    display.print_blocking("hello").unwrap();
+    // leds._0.set_high().unwrap();
+    //
+    // use embedded_hal::blocking::i2c::Read;
+    // let mut readbuf: [u8; 1] = [0; 1];
+    // match i2c.read(0x3e, &mut readbuf) {
+    //     Ok(_) => leds._1.set_high().unwrap(),
+    //     Err(_) => leds._2.set_high().unwrap(), // ここになっている
+    // }
+    //
+    // let _i2c_addrs = i2c_scan(&mut i2c); // ここでパニックになっている？
+    // leds._3.set_high().unwrap();
+    //
+    // // if _i2c_addrs.contains(&true) {
+    // //     _led_2.set_high().unwrap();
+    // // }
+    //
+    // let mut display = DisplayAQM0802::init_blocking(i2c, &mut timer).unwrap();
+    //
+    // // _led_3.set_high().unwrap();
+    //
+    // display.print_blocking("hello").unwrap();
 
     loop {
         // if button_0.is_high().unwrap() {

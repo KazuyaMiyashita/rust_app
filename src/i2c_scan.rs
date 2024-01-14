@@ -4,7 +4,7 @@ use embedded_hal::blocking::i2c::Read;
 
 pub fn i2c_scan<I2C: Read>(i2c: &mut I2C) -> [bool; 128] {
     let mut addr: [bool; 128] = [false; 128];
-    for i in 0..=127 {
+    for i in 6..=127 {
         let mut readbuf: [u8; 1] = [0; 1];
         let result = i2c.read(i.clone(), &mut readbuf);
         if let Ok(_) = result {
