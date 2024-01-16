@@ -19,6 +19,8 @@ use defmt::println;
 // use panic_halt as _;
 use panic_probe as _;
 
+use defmt_rtt as _;
+
 // Alias for our HAL crate
 use rp2040_hal as hal;
 
