@@ -10,35 +10,23 @@
 #![no_main]
 
 mod display_aqm0802;
-mod i2c_scan;
 mod leds;
 
-use defmt::{println, info};
+use defmt::info;
 use defmt_rtt as _;
-// Ensure we halt the program on panic (if we don't mention this crate it won't
-// be linked)
-// use panic_halt as _;
 use panic_probe as _;
-//use panic_semihosting as _;
 
-
-// Alias for our HAL crate
 use rp2040_hal as hal;
-
-// A shorter alias for the Peripheral Access Crate, which provides low-level
-// register access
 use hal::pac;
 use hal::gpio::{Pins, Pin, FunctionI2C, PullUp};
 use hal::I2C;
 use hal::fugit::RateExtU32;
 use hal::entry;
 
-// Some traits we need
-use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_hal::digital::v2::OutputPin;
 use embedded_hal::blocking::delay::DelayMs;
 
 use crate::display_aqm0802::DisplayAQM0802;
-use crate::i2c_scan::i2c_scan;
 use crate::leds::LEDs;
 
 /// The linker will place this boot block at the start of our program image. We
@@ -62,9 +50,7 @@ const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 /// an infinite loop. If there is an LED connected to that pin, it will blink.
 #[entry]
 fn main() -> ! {
-    println!("hello!");
-    info!("dhis is info!");
-    // panic!("aaaaa");
+    info!("hello!");
 
     // Grab our singleton objects
     let mut pac = pac::Peripherals::take().unwrap();
@@ -105,11 +91,7 @@ fn main() -> ! {
         pins.gpio12.into_push_pull_output().into_dyn_pin(),
         pins.gpio13.into_push_pull_output().into_dyn_pin(),
     );
-
-    // for i in 0..=15 {
-    //     leds.light(i);
-    //     timer.delay_ms(1000);
-    // }
+    leds.light(15).unwrap();
 
     // Configure two pins as being I²C, not GPIO
     let sda_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio16.reconfigure();
@@ -126,111 +108,47 @@ fn main() -> ! {
         &clocks.system_clock,
     );
 
-
-    // for i in 0..=15 {
-    //     leds.light(i).unwrap();
-    //     timer.delay_ms(500);
-    // }
-
-    // timer.delay_ms(500);
-    //
-    // leds.light(1).unwrap();
-    // timer.delay_ms(500);
-    // leds.light(0).unwrap();
-    // timer.delay_ms(500);
-
     use embedded_hal::blocking::i2c::Read;
     let mut readbuf: [u8; 1] = [0; 1];
-    // 0x3e の時は　Abort(1)
-    // 0x00 の時は AddressReserved
-
-    panic!("aaa");
-
     for addr in 0..=127 {
-        println!("{}:", addr);
+        info!("{}:", addr);
         match i2c.read(addr, &mut readbuf) {
             Ok(_) => {
-                println!("ok");
+                info!("ok");
             }
             Err(e) => {
                 match e {
                     hal::i2c::Error::Abort(i) => {
-                        println!("ng. error: Abort({})", i);
+                        info!("ng. error: Abort({})", i);
                     }
                     hal::i2c::Error::InvalidReadBufferLength => {
-                        println!("ng. error: InvalidReadBufferLength");
-                    },
+                        info!("ng. error: InvalidReadBufferLength");
+                    }
                     hal::i2c::Error::InvalidWriteBufferLength => {
-                        println!("ng. error: InvalidWriteBufferLength");
-                    },
+                        info!("ng. error: InvalidWriteBufferLength");
+                    }
                     hal::i2c::Error::AddressOutOfRange(i) => {
-                        println!("ng. error: AddressOutOfRange({})", i);
-                    },
+                        info!("ng. error: AddressOutOfRange({})", i);
+                    }
                     hal::i2c::Error::AddressReserved(i) => {
-                        println!("ng. error: AddressReserved({})", i);
-                    },
+                        info!("ng. error: AddressReserved({})", i);
+                    }
                     _ => {
-                        println!("ng. error: other");
-                    },
+                        info!("ng. error: other");
+                    }
                 }
             }
         }
+        timer.delay_ms(10);
     }
 
-
-    // match i2c.read(0x10, &mut readbuf) {
-    //     Ok(_) => leds.light(2).unwrap(),
-    //     Err(e) => match e {
-    //         hal::i2c::Error::Abort(i) => leds.light(3).unwrap(),
-    //         hal::i2c::Error::InvalidReadBufferLength => leds.light(4).unwrap(),
-    //         hal::i2c::Error::InvalidWriteBufferLength => leds.light(5).unwrap(),
-    //         hal::i2c::Error::AddressOutOfRange(_) => leds.light(6).unwrap(),
-    //         hal::i2c::Error::AddressReserved(_) => leds.light(7).unwrap(),
-    //         _ => leds.light(8).unwrap(),
-    //     }
-    // }
-    // timer.delay_ms(1000);
-    //
-    //
-    // leds.light(1).unwrap();
-    // timer.delay_ms(500);
-    // leds.light(0).unwrap();
-    // timer.delay_ms(500);
-
-    // let _i2c_addrs = i2c_scan(&mut i2c); // ここでパニックになっている？
-
-    // if _i2c_addrs.contains(&true) {
-    //     _led_2.set_high().unwrap();
-    // }
+    info!("???");
 
     let mut display = DisplayAQM0802::init_blocking(i2c, &mut timer).unwrap();
 
-    // _led_3.set_high().unwrap();
-
     display.print_blocking("hello").unwrap();
 
-    println!("into loop...");
+    info!("into loop...");
 
-    loop {
-        // if button_0.is_high().unwrap() {
-        //     led_0.set_high().unwrap();
-        // } else {
-        //     led_0.set_low().unwrap();
-        // }
-        // if button_1.is_high().unwrap() {
-        //     led_1.set_high().unwrap();
-        // } else {
-        //     led_1.set_low().unwrap();
-        // }
-        // if button_2.is_high().unwrap() {
-        //     led_2.set_high().unwrap();
-        // } else {
-        //     led_2.set_low().unwrap();
-        // }
-        // if button_3.is_high().unwrap() {
-        //     led_3.set_high().unwrap();
-        // } else {
-        //     led_3.set_low().unwrap();
-        // }
-    }
+    loop {}
 }

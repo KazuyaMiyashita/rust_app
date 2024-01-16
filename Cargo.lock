@@ -66,15 +66,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cortex-m-semihosting"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c23234600452033cc77e4b761e740e02d2c4168e11dbf36ab14a0f58973592b0"
-dependencies = [
- "cortex-m",
-]
-
-[[package]]
 name = "crc-any"
 version = "2.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -267,16 +258,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa6fa5645ef5a760cd340eaa92af9c1ce131c8c09e7f8926d8a24b59d26652b9"
 dependencies = [
  "cortex-m",
-]
-
-[[package]]
-name = "panic-semihosting"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee8a3e1233d9073d76a870223512ce4eeea43c067a94a445c13bd6d792d7b1ab"
-dependencies = [
- "cortex-m",
- "cortex-m-semihosting",
+ "defmt",
 ]
 
 [[package]]
@@ -413,7 +395,6 @@ dependencies = [
  "embedded-hal",
  "fugit",
  "panic-probe",
- "panic-semihosting",
  "rp2040-boot2",
  "rp2040-hal",
 ]

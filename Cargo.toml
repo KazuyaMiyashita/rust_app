@@ -9,20 +9,15 @@ edition = "2021"
 
 [dependencies]
 app = { path = "./app" }
-cortex-m = "0.7.2"
+cortex-m = "0.7"
 cortex-m-rt = "0.7"
 embedded-hal = { version = "0.2.5", features = ["unproven"] }
 
 defmt = "0.3"
 defmt-rtt = "0.4"
-
-#panic-halt = "0.2.0"
-panic-probe = "0.3.1"
-panic-semihosting = "0.6.0"
+panic-probe = { version = "0.3", features = ["print-defmt"] }
 
 rp2040-boot2 = "0.3.0"
-
-# We're using a Pico by default on this template
 rp2040-hal = { version="0.9.1", features=["rt", "critical-section-impl"] }
 fugit = "0.3.6"
 
