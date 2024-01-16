@@ -91,7 +91,7 @@ fn main() -> ! {
         pins.gpio12.into_push_pull_output().into_dyn_pin(),
         pins.gpio13.into_push_pull_output().into_dyn_pin(),
     );
-    leds.light(15).unwrap();
+    leds.light(0).unwrap();
 
     // Configure two pins as being I²C, not GPIO
     let sda_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio16.reconfigure();
@@ -108,41 +108,45 @@ fn main() -> ! {
         &clocks.system_clock,
     );
 
-    use embedded_hal::blocking::i2c::Read;
-    let mut readbuf: [u8; 1] = [0; 1];
-    for addr in 0..=127 {
-        info!("{}:", addr);
-        match i2c.read(addr, &mut readbuf) {
-            Ok(_) => {
-                info!("ok");
-            }
-            Err(e) => {
-                match e {
-                    hal::i2c::Error::Abort(i) => {
-                        info!("ng. error: Abort({})", i);
-                    }
-                    hal::i2c::Error::InvalidReadBufferLength => {
-                        info!("ng. error: InvalidReadBufferLength");
-                    }
-                    hal::i2c::Error::InvalidWriteBufferLength => {
-                        info!("ng. error: InvalidWriteBufferLength");
-                    }
-                    hal::i2c::Error::AddressOutOfRange(i) => {
-                        info!("ng. error: AddressOutOfRange({})", i);
-                    }
-                    hal::i2c::Error::AddressReserved(i) => {
-                        info!("ng. error: AddressReserved({})", i);
-                    }
-                    _ => {
-                        info!("ng. error: other");
-                    }
-                }
-            }
-        }
-        timer.delay_ms(10);
-    }
-
-    info!("???");
+    // use embedded_hal::blocking::i2c::Write;
+    // let bytes: [u8; 3] = [0x01, 0x02, 0x03];
+    // i2c.write(0x2c, &bytes).unwrap();
+    //
+    // use embedded_hal::blocking::i2c::Read;
+    // let mut readbuf: [u8; 1] = [0; 1];
+    // for addr in 0..=127 {
+    //     info!("{}:", addr);
+    //     match i2c.read(addr, &mut readbuf) {
+    //         Ok(_) => {
+    //             info!("ok");
+    //         }
+    //         Err(e) => {
+    //             match e {
+    //                 hal::i2c::Error::Abort(i) => {
+    //                     info!("ng. error: Abort({})", i);
+    //                 }
+    //                 hal::i2c::Error::InvalidReadBufferLength => {
+    //                     info!("ng. error: InvalidReadBufferLength");
+    //                 }
+    //                 hal::i2c::Error::InvalidWriteBufferLength => {
+    //                     info!("ng. error: InvalidWriteBufferLength");
+    //                 }
+    //                 hal::i2c::Error::AddressOutOfRange(i) => {
+    //                     info!("ng. error: AddressOutOfRange({})", i);
+    //                 }
+    //                 hal::i2c::Error::AddressReserved(i) => {
+    //                     info!("ng. error: AddressReserved({})", i);
+    //                 }
+    //                 _ => {
+    //                     info!("ng. error: other");
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     timer.delay_ms(10);
+    // }
+    //
+    // info!("???");
 
     let mut display = DisplayAQM0802::init_blocking(i2c, &mut timer).unwrap();
 
