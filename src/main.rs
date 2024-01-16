@@ -17,7 +17,8 @@ use defmt::println;
 // Ensure we halt the program on panic (if we don't mention this crate it won't
 // be linked)
 // use panic_halt as _;
-use panic_probe as _;
+// use panic_probe as _;
+extern crate panic_semihosting;
 
 use defmt::info;
 use defmt_rtt as _;
@@ -53,14 +54,19 @@ pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GENERIC_03H;
 /// if your board has a different frequency
 const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 
-// いるのか?
-#[defmt::panic_handler] // defmt's attribute
-fn defmt_panic() -> ! {
-    // leave out the printing part here
-    println!("panic!");
-
-    loop {}
-}
+// // いるのか?
+// #[panic_handler] // defmt's attribute
+// fn on_panic(panic_info: &core::panic::PanicInfo) -> ! {
+//     // leave out the printing part here
+//     println!("panic!");
+//     if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
+//         println!("panic occurred: {:?}", s);
+//     } else {
+//         println!("panic occurred");
+//     }
+//
+//     loop {}
+// }
 
 /// Entry point to our bare-metal application.
 ///
