@@ -19,6 +19,7 @@ use defmt::println;
 // use panic_halt as _;
 use panic_probe as _;
 
+use defmt::info;
 use defmt_rtt as _;
 
 // Alias for our HAL crate
@@ -52,6 +53,15 @@ pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GENERIC_03H;
 /// if your board has a different frequency
 const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 
+// いるのか?
+#[defmt::panic_handler] // defmt's attribute
+fn defmt_panic() -> ! {
+    // leave out the printing part here
+    println!("panic!");
+
+    loop {}
+}
+
 /// Entry point to our bare-metal application.
 ///
 /// The `#[rp2040_hal::entry]` macro ensures the Cortex-M start-up code calls this function
@@ -61,8 +71,9 @@ const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 /// an infinite loop. If there is an LED connected to that pin, it will blink.
 #[entry]
 fn main() -> ! {
-
     println!("hello!");
+    info!("dhis is info!");
+    panic!("aaaaa");
 
     // Grab our singleton objects
     let mut pac = pac::Peripherals::take().unwrap();
@@ -142,27 +153,38 @@ fn main() -> ! {
     // 0x3e の時は　Abort(1)
     // 0x00 の時は AddressReserved
 
+    panic!("aaa");
+
     for addr in 0..=127 {
+        println!("{}:", addr);
         match i2c.read(addr, &mut readbuf) {
-            Ok(_) => leds.light(2).unwrap(),
-            Err(e) => match e {
-                hal::i2c::Error::Abort(i) => leds.light(3).unwrap(),
-                hal::i2c::Error::InvalidReadBufferLength => leds.light(4).unwrap(),
-                hal::i2c::Error::InvalidWriteBufferLength => leds.light(5).unwrap(),
-                hal::i2c::Error::AddressOutOfRange(_) => leds.light(6).unwrap(),
-                hal::i2c::Error::AddressReserved(_) => leds.light(7).unwrap(),
-                _ => leds.light(8).unwrap(),
+            Ok(_) => {
+                println!("ok");
+            }
+            Err(e) => {
+                match e {
+                    hal::i2c::Error::Abort(i) => {
+                        println!("ng. error: Abort({})", i);
+                    }
+                    hal::i2c::Error::InvalidReadBufferLength => {
+                        println!("ng. error: InvalidReadBufferLength");
+                    },
+                    hal::i2c::Error::InvalidWriteBufferLength => {
+                        println!("ng. error: InvalidWriteBufferLength");
+                    },
+                    hal::i2c::Error::AddressOutOfRange(i) => {
+                        println!("ng. error: AddressOutOfRange({})", i);
+                    },
+                    hal::i2c::Error::AddressReserved(i) => {
+                        println!("ng. error: AddressReserved({})", i);
+                    },
+                    _ => {
+                        println!("ng. error: other");
+                    },
+                }
             }
         }
-        // leds.light((addr % 16) as u8).unwrap();
-        timer.delay_ms(125);
-        leds.light(0).unwrap();
-        timer.delay_ms(125);
     }
-
-    timer.delay_ms(1000);
-
-    leds.light(15).unwrap();
 
 
     // match i2c.read(0x10, &mut readbuf) {
@@ -195,6 +217,8 @@ fn main() -> ! {
     // _led_3.set_high().unwrap();
 
     display.print_blocking("hello").unwrap();
+
+    println!("into loop...");
 
     loop {
         // if button_0.is_high().unwrap() {
