@@ -13,9 +13,11 @@ mod display_aqm0802;
 mod i2c_scan;
 mod leds;
 
+use defmt::println;
 // Ensure we halt the program on panic (if we don't mention this crate it won't
 // be linked)
-use panic_halt as _;
+// use panic_halt as _;
+use panic_probe as _;
 
 // Alias for our HAL crate
 use rp2040_hal as hal;
@@ -57,6 +59,9 @@ const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 /// an infinite loop. If there is an LED connected to that pin, it will blink.
 #[entry]
 fn main() -> ! {
+
+    println!("hello!");
+
     // Grab our singleton objects
     let mut pac = pac::Peripherals::take().unwrap();
 
