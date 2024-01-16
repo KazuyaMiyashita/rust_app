@@ -2,7 +2,7 @@ use embedded_hal::blocking::i2c::Write;
 use embedded_hal::blocking::delay::DelayMs;
 use rp_pico as bsp;
 use bsp::hal;
-use hal::i2c::Error;
+use i2c_pio::Error;
 use hal::Timer;
 
 const DISPLAY_I2C_ADDR: u8 = 0x3e;
