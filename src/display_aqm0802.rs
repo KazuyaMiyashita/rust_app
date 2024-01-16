@@ -1,7 +1,9 @@
 use embedded_hal::blocking::i2c::Write;
 use embedded_hal::blocking::delay::DelayMs;
-use rp2040_hal::i2c::Error;
-use rp2040_hal::Timer;
+use rp_pico as bsp;
+use bsp::hal;
+use hal::i2c::Error;
+use hal::Timer;
 
 const DISPLAY_I2C_ADDR: u8 = 0x3e;
 const SETTING: u8 = 0x00;

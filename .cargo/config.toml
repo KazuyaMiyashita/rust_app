@@ -16,6 +16,7 @@ target = "thumbv6m-none-eabi"
 # * no-vectorize-loops turns off the loop vectorizer (seeing as the M0+ doesn't
 #   have SIMD)
 rustflags = [
+    "-C", "linker=flip-link",
     "-C", "link-arg=--nmagic",
     "-C", "link-arg=-Tlink.x",
     "-C", "link-arg=-Tdefmt.x",

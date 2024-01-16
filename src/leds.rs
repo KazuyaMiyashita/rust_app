@@ -1,5 +1,6 @@
 use core::convert::Infallible;
-use rp2040_hal as hal;
+use rp_pico as bsp;
+use bsp::hal;
 use hal::gpio::{Pin, DynPinId, FunctionSio, SioOutput, PullDown};
 use embedded_hal::digital::v2::OutputPin;
 

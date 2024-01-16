@@ -16,26 +16,21 @@ use defmt::info;
 use defmt_rtt as _;
 use panic_probe as _;
 
-use rp2040_hal as hal;
+use rp_pico as bsp;
+
+use bsp::entry;
+
+use bsp::hal;
 use hal::pac;
 use hal::gpio::{Pins, Pin, FunctionI2C, PullUp};
 use hal::I2C;
 use hal::fugit::RateExtU32;
-use hal::entry;
 
 use embedded_hal::digital::v2::OutputPin;
 use embedded_hal::blocking::delay::DelayMs;
 
 use crate::display_aqm0802::DisplayAQM0802;
 use crate::leds::LEDs;
-
-/// The linker will place this boot block at the start of our program image. We
-/// need this to help the ROM bootloader get our code up and running.
-/// Note: This boot block is not necessary when using a rp-hal based BSP
-/// as the BSPs already perform this step.
-#[link_section = ".boot2"]
-#[used]
-pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GENERIC_03H;
 
 /// External high-speed crystal on the Raspberry Pi Pico board is 12 MHz. Adjust
 /// if your board has a different frequency
