@@ -13,15 +13,14 @@ mod display_aqm0802;
 mod i2c_scan;
 mod leds;
 
-use defmt::println;
+use defmt::{println, info};
+use defmt_rtt as _;
 // Ensure we halt the program on panic (if we don't mention this crate it won't
 // be linked)
 // use panic_halt as _;
-// use panic_probe as _;
-extern crate panic_semihosting;
+use panic_probe as _;
+//use panic_semihosting as _;
 
-use defmt::info;
-use defmt_rtt as _;
 
 // Alias for our HAL crate
 use rp2040_hal as hal;
@@ -54,20 +53,6 @@ pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GENERIC_03H;
 /// if your board has a different frequency
 const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 
-// // いるのか?
-// #[panic_handler] // defmt's attribute
-// fn on_panic(panic_info: &core::panic::PanicInfo) -> ! {
-//     // leave out the printing part here
-//     println!("panic!");
-//     if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
-//         println!("panic occurred: {:?}", s);
-//     } else {
-//         println!("panic occurred");
-//     }
-//
-//     loop {}
-// }
-
 /// Entry point to our bare-metal application.
 ///
 /// The `#[rp2040_hal::entry]` macro ensures the Cortex-M start-up code calls this function
@@ -79,7 +64,7 @@ const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 fn main() -> ! {
     println!("hello!");
     info!("dhis is info!");
-    panic!("aaaaa");
+    // panic!("aaaaa");
 
     // Grab our singleton objects
     let mut pac = pac::Peripherals::take().unwrap();
