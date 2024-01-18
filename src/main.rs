@@ -8,6 +8,7 @@ use bsp::entry;
 use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::adc::OneShot;
 use panic_probe as _;
 
 // Provide an alias for our BSP so we can switch targets quickly.
@@ -20,6 +21,7 @@ use bsp::hal::{
     pac,
     sio::Sio,
     watchdog::Watchdog,
+    Adc,
 };
 
 #[entry]
@@ -41,8 +43,8 @@ fn main() -> ! {
         &mut pac.RESETS,
         &mut watchdog,
     )
-    .ok()
-    .unwrap();
+        .ok()
+        .unwrap();
 
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
@@ -64,13 +66,31 @@ fn main() -> ! {
     // in series with the LED.
     let mut led_pin = pins.led.into_push_pull_output();
 
+    // Enable ADC
+    let mut adc = Adc::new(pac.ADC, &mut pac.RESETS);
+    // // Enable the temperature sense channel
+    let mut temperature_sensor = adc.take_temp_sensor().unwrap();
+
+    let mut is_lighting = false;
     loop {
-        info!("on!");
-        led_pin.set_high().unwrap();
-        delay.delay_ms(500);
-        info!("off!");
-        led_pin.set_low().unwrap();
-        delay.delay_ms(500);
+        if is_lighting {
+            led_pin.set_low().unwrap();
+        } else {
+            led_pin.set_high().unwrap();
+        }
+        is_lighting = !is_lighting;
+
+        let conversion_factor: f32 = 3.3 / 4096.0; // センサーは12bit。Pythonの例だと2^16で割っている
+        let reading: u16 = adc.read(&mut temperature_sensor).unwrap();
+        let reading: f32 = f32::from(reading) * conversion_factor;
+
+        let temperature = 27f32 - (reading - 0.706) / 0.001721;
+        // https://github.com/raspberrypi/pico-micropython-examples/blob/master/adc/temperature.py
+        info!(
+            "ADC readings: Temperature: {}",
+            temperature
+        );
+        delay.delay_ms(1000);
     }
 }
 
