@@ -21,6 +21,7 @@ use rp_pico::entry;
 
 // I2C HAL traits & Types.
 use embedded_hal::blocking::i2c::{Operation, Read, Transactional, Write};
+use embedded_hal::blocking::delay::DelayMs;
 
 // Time handling traits
 use fugit::RateExtU32;
@@ -120,34 +121,38 @@ fn main() -> ! {
 
     let mut i2c_pio = i2c_pio::I2C::new(
         &mut pio,
-        pins.gpio20,
-        pins.gpio21,
+        pins.gpio16, // 16
+        pins.gpio17, // 17
         sm0,
         100.kHz(),
         clocks.system_clock.freq(),
     );
 
-    info!("try to initialize display");
-    let mut display = DisplayAQM0802::init_blocking(i2c_pio, &mut timer).unwrap();
-    info!("try to print to display");
-    display.print_blocking("hello").unwrap();
-    info!("display finish");
+    timer.delay_ms(40);
+    info!("timer ok");
 
 
-    // info!("try to read i2c (1)");
-    // let mut readbuf: [u8; 1] = [0; 1];
-    // for addr in 0x3e..=127u8 {
-    //     info!("{}:", addr);
-    //     match i2c_pio.read(addr, &mut readbuf) {
-    //         Ok(_) => {
-    //             info!("ok");
-    //         }
-    //         Err(e) => {
-    //             info!("ng. some error occurred.");
-    //         }
-    //     }
-    // }
-    // info!("try to read i2c (1) finish");
+    // info!("try to initialize display");
+    // let mut display = DisplayAQM0802::init_blocking(i2c_pio, &mut timer).unwrap();
+    // info!("try to print to display");
+    // display.print_blocking("hello").unwrap();
+    // info!("display finish");
+
+
+    info!("try to read i2c (1)");
+    let mut readbuf: [u8; 1] = [0; 1];
+    for addr in 0..=127u8 {
+        info!("{}:", addr);
+        match i2c_pio.read(addr, &mut readbuf) {
+            Ok(_) => {
+                info!("ok");
+            }
+            Err(e) => {
+                info!("ng. some error occurred.");
+            }
+        }
+    }
+    info!("try to read i2c (1) finish");
     //
     //
     // let mut temp = [0; 2];
