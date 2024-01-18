@@ -1,85 +1,39 @@
-//! # Pico I2C PIO Example
+//! Blinks the LED on a Pico board
 //!
-//! Reads the temperature from an LM75B
-//!
-//! This read over I2C the temerature from an LM75B temperature sensor wired on pins 20 and 21
-//! using the PIO peripheral as an I2C bus controller.
-//! The pins used for the I2C can be remapped to any other pin available to the PIO0 peripheral.
-//!
-//! See the `Cargo.toml` file for Copyright and license details.
-
+//! This will blink an LED attached to GP25, which is the pin the Pico uses for the on-board LED.
 #![no_std]
 #![no_main]
 
-mod display_aqm0802;
-
-// The trait used by formatting macros like write! and writeln!
-use core::fmt::Write as FmtWrite;
-
-// The macro for our start-up function
-use rp_pico::entry;
-
-// I2C HAL traits & Types.
-use embedded_hal::blocking::i2c::{Operation, Read, Transactional, Write};
-use embedded_hal::blocking::delay::DelayMs;
-
-// Time handling traits
-use fugit::RateExtU32;
-
-
-use defmt::info;
+use bsp::entry;
+use defmt::*;
 use defmt_rtt as _;
+use embedded_hal::digital::v2::OutputPin;
 use panic_probe as _;
 
+// Provide an alias for our BSP so we can switch targets quickly.
+// Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
+use rp_pico as bsp;
+// use sparkfun_pro_micro_rp2040 as bsp;
 
-// Pull in any important traits
-use rp_pico::hal::prelude::*;
+use bsp::hal::{
+    clocks::{init_clocks_and_plls, Clock},
+    pac,
+    sio::Sio,
+    watchdog::Watchdog,
+};
 
-// A shorter alias for the Peripheral Access Crate, which provides low-level
-// register access
-use rp_pico::hal::pac;
-
-// A shorter alias for the Hardware Abstraction Layer, which provides
-// higher-level drivers.
-use rp_pico::hal;
-
-// UART related types
-use hal::uart::{DataBits, StopBits, UartConfig};
-
-use crate::display_aqm0802::DisplayAQM0802;
-
-/// Prints the temperature received from the sensor
-fn print_temperature(serial: &mut impl FmtWrite, temp: [u8; 2]) {
-    let temp_i16 = i16::from_be_bytes(temp) >> 5;
-    let temp_f32 = f32::from(temp_i16) * 0.125;
-
-    // Write formatted output but ignore any error.
-    let _ = writeln!(serial, "Temperature: {:0.2}°C", temp_f32);
-    info!("Temperature: {}°C", temp_f32);
-}
-
-/// Entry point to our bare-metal application.
-///
-/// The `#[entry]` macro ensures the Cortex-M start-up code calls this function
-/// as soon as all global variables are initialised.
-///
-/// The function configures the RP2040 peripherals, reads the temperature from
-/// the attached LM75B using PIO0.
 #[entry]
 fn main() -> ! {
-    info!("hello!");
-
-    // Grab our singleton objects
+    info!("Program start");
     let mut pac = pac::Peripherals::take().unwrap();
+    let core = pac::CorePeripherals::take().unwrap();
+    let mut watchdog = Watchdog::new(pac.WATCHDOG);
+    let sio = Sio::new(pac.SIO);
 
-    // Set up the watchdog driver - needed by the clock setup code
-    let mut watchdog = hal::Watchdog::new(pac.WATCHDOG);
-
-    // Configure the clocks
-    //
-    // The default is to generate a 125 MHz system clock
-    let clocks = hal::clocks::init_clocks_and_plls(
-        rp_pico::XOSC_CRYSTAL_FREQ,
+    // External high-speed crystal on the pico board is 12Mhz
+    let external_xtal_freq_hz = 12_000_000u32;
+    let clocks = init_clocks_and_plls(
+        external_xtal_freq_hz,
         pac.XOSC,
         pac.CLOCKS,
         pac.PLL_SYS,
@@ -87,117 +41,36 @@ fn main() -> ! {
         &mut pac.RESETS,
         &mut watchdog,
     )
-        .ok()
-        .unwrap();
+    .ok()
+    .unwrap();
 
-    let mut timer = hal::Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
+    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
-    // The single-cycle I/O block controls our GPIO pins
-    let sio = hal::Sio::new(pac.SIO);
-
-    // Set the pins up according to their function on this particular board
-    let pins = rp_pico::Pins::new(
+    let pins = bsp::Pins::new(
         pac.IO_BANK0,
         pac.PADS_BANK0,
         sio.gpio_bank0,
         &mut pac.RESETS,
     );
 
-    let uart_pins = (
-        // UART TX (characters sent from RP2040) on pin 1 (GPIO0)
-        pins.gpio0.into_function::<hal::gpio::FunctionUart>(),
-        // UART RX (characters received by RP2040) on pin 2 (GPIO1)
-        pins.gpio1.into_function::<hal::gpio::FunctionUart>(),
-    );
-
-    let mut uart = hal::uart::UartPeripheral::new(pac.UART0, uart_pins, &mut pac.RESETS)
-        .enable(
-            UartConfig::new(115_200.Hz(), DataBits::Eight, None, StopBits::One),
-            clocks.peripheral_clock.freq(),
-        )
-        .unwrap();
-
-    let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
-
-    let mut i2c_pio = i2c_pio::I2C::new(
-        &mut pio,
-        pins.gpio16, // 16
-        pins.gpio17, // 17
-        sm0,
-        100.kHz(),
-        clocks.system_clock.freq(),
-    );
-
-    timer.delay_ms(40);
-    info!("timer ok");
-
-
-    // info!("try to initialize display");
-    // let mut display = DisplayAQM0802::init_blocking(i2c_pio, &mut timer).unwrap();
-    // info!("try to print to display");
-    // display.print_blocking("hello").unwrap();
-    // info!("display finish");
-
-
-    info!("try to read i2c (1)");
-    let mut readbuf: [u8; 1] = [0; 1];
-    for addr in 0..=127u8 {
-        info!("{}:", addr);
-        match i2c_pio.read(addr, &mut readbuf) {
-            Ok(_) => {
-                info!("ok");
-            }
-            Err(e) => {
-                info!("ng. some error occurred.");
-            }
-        }
-    }
-    info!("try to read i2c (1) finish");
+    // This is the correct pin on the Raspberry Pico board. On other boards, even if they have an
+    // on-board LED, it might need to be changed.
     //
+    // Notably, on the Pico W, the LED is not connected to any of the RP2040 GPIOs but to the cyw43 module instead.
+    // One way to do that is by using [embassy](https://github.com/embassy-rs/embassy/blob/main/examples/rp/src/bin/wifi_blinky.rs)
     //
-    // let mut temp = [0; 2];
-    // info!("try to read i2c(2)");
-    // i2c_pio
-    //     .read(0x48u8, &mut temp)
-    //     .expect("Failed to read from the peripheral");
-    // info!("try to read i2c(2) finish");
-    //
-    // print_temperature(&mut uart, temp);
-    //
-    // i2c_pio
-    //     .write(0x48u8, &[0])
-    //     .expect("Failed to write to the peripheral");
-    //
-    // let mut temp = [0; 2];
-    // i2c_pio
-    //     .read(0x48u8, &mut temp)
-    //     .expect("Failed to read from the peripheral");
-    // print_temperature(&mut uart, temp);
-    //
-    // let mut config = [0];
-    // let mut thyst = [0; 2];
-    // let mut tos = [0; 2];
-    // let mut temp = [0; 2];
-    // let mut operations = [
-    //     Operation::Write(&[1]),
-    //     Operation::Read(&mut config),
-    //     Operation::Write(&[2]),
-    //     Operation::Read(&mut thyst),
-    //     Operation::Write(&[3]),
-    //     Operation::Read(&mut tos),
-    //     Operation::Write(&[0]),
-    //     Operation::Read(&mut temp),
-    // ];
-    // i2c_pio
-    //     .exec(0x48u8, &mut operations)
-    //     .expect("Failed to run all operations");
-    // print_temperature(&mut uart, temp);
-    //
-
-    info!("finish");
+    // If you have a Pico W and want to toggle a LED with a simple GPIO output pin, you can connect an external
+    // LED to one of the GPIO pins, and reference that pin here. Don't forget adding an appropriate resistor
+    // in series with the LED.
+    let mut led_pin = pins.led.into_push_pull_output();
 
     loop {
-        cortex_m::asm::wfi();
+        info!("on!");
+        led_pin.set_high().unwrap();
+        delay.delay_ms(500);
+        info!("off!");
+        led_pin.set_low().unwrap();
+        delay.delay_ms(500);
     }
 }
 
