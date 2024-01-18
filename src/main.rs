@@ -8,6 +8,7 @@ use bsp::entry;
 use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::blocking::i2c::Write;
 use embedded_hal::adc::OneShot;
 use panic_probe as _;
 
@@ -22,7 +23,10 @@ use bsp::hal::{
     sio::Sio,
     watchdog::Watchdog,
     Adc,
+    I2C,
+    gpio::{FunctionI2C, Pin, PullUp}
 };
+use bsp::hal::fugit::RateExtU32;
 
 #[entry]
 fn main() -> ! {
@@ -70,6 +74,24 @@ fn main() -> ! {
     let mut adc = Adc::new(pac.ADC, &mut pac.RESETS);
     // // Enable the temperature sense channel
     let mut temperature_sensor = adc.take_temp_sensor().unwrap();
+
+    // Configure two pins as being I²C, not GPIO
+    let sda_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio16.reconfigure();
+    let scl_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio17.reconfigure();
+    // Create the I²C drive, using the two pre-configured pins. This will fail
+    // at compile time if the pins are in the wrong mode, or if this I²C
+    // peripheral isn't available on these pins!
+    let mut i2c = I2C::i2c0(
+        pac.I2C0,
+        sda_pin,
+        scl_pin, // Try `not_an_scl_pin` here
+        400.kHz(),
+        &mut pac.RESETS,
+        &clocks.system_clock,
+    );
+
+    // Write three bytes to the I²C device with 7-bit address 0x2C
+    i2c.write(0x2c, &[1, 2, 3]).unwrap(); // Abort(1) になる。宛先のアドレスのデバイスはないからそうなるのか。
 
     let mut is_lighting = false;
     loop {
