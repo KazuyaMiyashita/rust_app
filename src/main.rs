@@ -91,7 +91,17 @@ fn main() -> ! {
     );
 
     // Write three bytes to the I²C device with 7-bit address 0x2C
-    i2c.write(0x2c, &[1, 2, 3]).unwrap(); // Abort(1) になる。宛先のアドレスのデバイスはないからそうなるのか。
+    // i2c.write(0x2c, &[1, 2, 3]).unwrap(); // Abort(1) になる。宛先のアドレスのデバイスはないからそうなるのか。
+    // I2C addresses are tipically 7 bits long, 0..127
+    for address in 0..=127 {
+        match i2c.write(address, &[1]) {
+            Ok(_) => {
+                info!("Found device on address {}\n", address);
+            }
+            Err(_) => {}
+        }
+    }
+    // cf. https://github.com/JoaquinEduardoArreguez/stm32f1xx-rust-i2c-scanner/blob/c47a66b38b6b7a13e90d0b5543e7f2c598060c41/src/main.rs#L59
 
     let mut is_lighting = false;
     loop {
