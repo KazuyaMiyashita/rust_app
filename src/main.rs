@@ -3,11 +3,15 @@
 //! This will blink an LED attached to GP25, which is the pin the Pico uses for the on-board LED.
 #![no_std]
 #![no_main]
+#![feature(alloc_error_handler)]
+
+mod display_aqm0802;
 
 use bsp::entry;
 use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::adc::OneShot;
+use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::blocking::i2c::Write;
 use embedded_hal::digital::v2::{InputPin, OutputPin};
 use panic_probe as _;
@@ -24,12 +28,34 @@ use bsp::hal::{
     pac,
     sio::Sio,
     watchdog::Watchdog,
-    Adc, I2C,
+    Adc, Timer, I2C,
 };
+
+use alloc_cortex_m::CortexMHeap;
+use core::alloc::Layout;
+
+extern crate alloc;
+
+use crate::display_aqm0802::DisplayAQM0802;
+
+#[global_allocator]
+static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
+
+#[alloc_error_handler]
+fn oom(_: Layout) -> ! {
+    error!("oom error!");
+    loop {}
+}
 
 #[entry]
 fn main() -> ! {
     info!("Program start");
+
+    use core::mem::MaybeUninit;
+    const HEAP_SIZE: usize = 1024 * 20; //20KBの領域
+    static mut HEAP: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
+    unsafe { ALLOCATOR.init(HEAP.as_ptr() as usize, HEAP_SIZE) }
+
     let mut pac = pac::Peripherals::take().unwrap();
     let core = pac::CorePeripherals::take().unwrap();
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
@@ -48,6 +74,8 @@ fn main() -> ! {
     )
     .ok()
     .unwrap();
+
+    let mut timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
 
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
@@ -112,6 +140,10 @@ fn main() -> ! {
     }
     // cf. https://github.com/JoaquinEduardoArreguez/stm32f1xx-rust-i2c-scanner/blob/c47a66b38b6b7a13e90d0b5543e7f2c598060c41/src/main.rs#L59
 
+    let mut display = DisplayAQM0802::init_blocking(i2c, &mut timer).unwrap();
+    display.print_blocking("Hello!".as_bytes()).unwrap();
+    timer.delay_ms(1000);
+
     let mut counter: u16 = 0; // 0 ~ 999, 1msごとに1カウントアップ
     let mut is_lighting = false;
     loop {
@@ -132,6 +164,12 @@ fn main() -> ! {
             let temperature = 27f32 - (reading - 0.706) / 0.001721;
             // https://github.com/raspberrypi/pico-micropython-examples/blob/master/adc/temperature.py
             info!("ADC readings: Temperature: {}", temperature);
+
+            // 22.93ﾟC のような文字列にする
+            let display_string = alloc::format!("{:.2}", temperature);
+            let display_vec =
+                alloc::vec![display_string.as_bytes(), &[0b11011111], "C".as_bytes()].concat();
+            display.print_blocking(display_vec.as_slice()).unwrap();
         }
 
         if button_0.is_high().unwrap() {
