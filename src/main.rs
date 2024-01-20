@@ -5,38 +5,56 @@
 #![no_main]
 #![feature(alloc_error_handler)]
 
-mod display_aqm0802;
-
 use bsp::entry;
 use defmt::*;
 use defmt_rtt as _;
-use embedded_hal::adc::OneShot;
-use embedded_hal::blocking::delay::DelayMs;
-use embedded_hal::blocking::i2c::Write;
-use embedded_hal::digital::v2::{InputPin, OutputPin};
 use panic_probe as _;
 
-// Provide an alias for our BSP so we can switch targets quickly.
-// Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
 use rp_pico as bsp;
-// use sparkfun_pro_micro_rp2040 as bsp;
 
-use bsp::hal::fugit::RateExtU32;
+use embedded_hal::digital::v2::{InputPin, ToggleableOutputPin};
+
 use bsp::hal::{
-    clocks::{init_clocks_and_plls, Clock},
-    gpio::{FunctionI2C, Pin, PullUp},
-    pac,
-    sio::Sio,
-    watchdog::Watchdog,
-    Adc, Timer, I2C,
+    clocks::init_clocks_and_plls, gpio, gpio::Interrupt::EdgeHigh, pac, sio::Sio,
+    watchdog::Watchdog, Timer,
 };
+
+use bsp::hal::pac::interrupt;
+
+use fugit::ExtU32;
+
+use core::cell::RefCell;
+use cortex_m::interrupt::Mutex;
 
 use alloc_cortex_m::CortexMHeap;
 use core::alloc::Layout;
+use rp_pico::hal::timer::{Alarm, Alarm0};
 
 extern crate alloc;
 
-use crate::display_aqm0802::DisplayAQM0802;
+// Pin types quickly become very long!
+// We'll create some type aliases using `type` to help with that
+
+/// This pin will be our output - it will drive an LED if you run this on a Pico
+type LedPin = gpio::Pin<gpio::bank0::Gpio25, gpio::FunctionSioOutput, gpio::PullNone>;
+
+/// This pin will be our interrupt source.
+/// ~~It will trigger an interrupt if pulled to ground (via a switch or jumper wire)~~
+/// 電流が流れている時にONとしたいので、PullUp から PullDown に変更した
+type ButtonPin = gpio::Pin<gpio::bank0::Gpio19, gpio::FunctionSioInput, gpio::PullDown>;
+// type Button1Pin = gpio::Pin<gpio::bank0::Gpio18, gpio::FunctionSioInput, gpio::PullDown>;
+// type Button2Pin = gpio::Pin<gpio::bank0::Gpio17, gpio::FunctionSioInput, gpio::PullDown>;
+// type Button3Pin = gpio::Pin<gpio::bank0::Gpio16, gpio::FunctionSioInput, gpio::PullDown>;
+
+/// Since we're always accessing these pins together we'll store them in a tuple.
+/// Giving this tuple a type alias means we won't need to use () when putting them
+/// inside an Option. That will be easier to read.
+type LedAndButtonAndAlarm = (LedPin, ButtonPin, Alarm0);
+
+/// This how we transfer our Led and Button pins into the Interrupt Handler.
+/// We'll have the option hold both using the LedAndButton type.
+/// This will make it a bit easier to unpack them later.
+static GLOBAL_PINS: Mutex<RefCell<Option<LedAndButtonAndAlarm>>> = Mutex::new(RefCell::new(None));
 
 #[global_allocator]
 static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
@@ -57,14 +75,11 @@ fn main() -> ! {
     unsafe { ALLOCATOR.init(HEAP.as_ptr() as usize, HEAP_SIZE) }
 
     let mut pac = pac::Peripherals::take().unwrap();
-    let core = pac::CorePeripherals::take().unwrap();
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
     let sio = Sio::new(pac.SIO);
 
-    // External high-speed crystal on the pico board is 12Mhz
-    let external_xtal_freq_hz = 12_000_000u32;
     let clocks = init_clocks_and_plls(
-        external_xtal_freq_hz,
+        rp_pico::XOSC_CRYSTAL_FREQ,
         pac.XOSC,
         pac.CLOCKS,
         pac.PLL_SYS,
@@ -76,8 +91,8 @@ fn main() -> ! {
     .unwrap();
 
     let mut timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
-
-    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
+    let mut alarm = timer.alarm_0().unwrap();
+    alarm.enable_interrupt();
 
     let pins = bsp::Pins::new(
         pac.IO_BANK0,
@@ -86,121 +101,97 @@ fn main() -> ! {
         &mut pac.RESETS,
     );
 
-    // This is the correct pin on the Raspberry Pico board. On other boards, even if they have an
-    // on-board LED, it might need to be changed.
-    //
-    // Notably, on the Pico W, the LED is not connected to any of the RP2040 GPIOs but to the cyw43 module instead.
-    // One way to do that is by using [embassy](https://github.com/embassy-rs/embassy/blob/main/examples/rp/src/bin/wifi_blinky.rs)
-    //
-    // If you have a Pico W and want to toggle a LED with a simple GPIO output pin, you can connect an external
-    // LED to one of the GPIO pins, and reference that pin here. Don't forget adding an appropriate resistor
-    // in series with the LED.
-    let mut led_pin = pins.led.into_push_pull_output();
+    let led = pins.led.reconfigure(); // into_push_pull_output
 
-    let button_0 = pins.gpio19.into_pull_down_input();
-    let button_1 = pins.gpio18.into_pull_down_input();
-    let button_2 = pins.gpio17.into_pull_down_input();
-    let button_3 = pins.gpio16.into_pull_down_input();
+    // Set up the GPIO pin that will be our input
+    let in_pin = pins.gpio19.reconfigure();
 
-    let mut led_0 = pins.gpio13.into_push_pull_output();
-    let mut led_1 = pins.gpio12.into_push_pull_output();
-    let mut led_2 = pins.gpio11.into_push_pull_output();
-    let mut led_3 = pins.gpio10.into_push_pull_output();
+    // Trigger on the 'falling edge' of the input pin.
+    // This will happen as the button is being pressed
+    // EdgeLow から EdgeHigh に変更した
+    in_pin.set_interrupt_enabled(EdgeHigh, true);
 
-    // Enable ADC
-    let mut adc = Adc::new(pac.ADC, &mut pac.RESETS);
-    // // Enable the temperature sense channel
-    let mut temperature_sensor = adc.take_temp_sensor().unwrap();
+    // Give away our pins by moving them into the `GLOBAL_PINS` variable.
+    // We won't need to access them in the main thread again
+    // critical_section::with(|cs| {
+    //     GLOBAL_PINS.borrow(cs).replace(Some((led, in_pin)));
+    // });
+    cortex_m::interrupt::free(|cs| {
+        GLOBAL_PINS.borrow(cs).replace(Some((led, in_pin, alarm)));
+    });
 
-    // Configure two pins as being I²C, not GPIO
-    let sda_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio20.reconfigure();
-    let scl_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio21.reconfigure();
-    // Create the I²C drive, using the two pre-configured pins. This will fail
-    // at compile time if the pins are in the wrong mode, or if this I²C
-    // peripheral isn't available on these pins!
-    let mut i2c = I2C::i2c0(
-        pac.I2C0,
-        sda_pin,
-        scl_pin, // Try `not_an_scl_pin` here
-        400.kHz(),
-        &mut pac.RESETS,
-        &clocks.system_clock,
-    );
+    // Unmask the IO_BANK0 IRQ so that the NVIC interrupt controller
+    // will jump to the interrupt function when the interrupt occurs.
+    // We do this last so that the interrupt can't go off while
+    // it is in the middle of being configured
+    unsafe {
+        pac::NVIC::unmask(pac::Interrupt::IO_IRQ_BANK0);
+        pac::NVIC::unmask(pac::Interrupt::TIMER_IRQ_0);
+    }
 
-    // Write three bytes to the I²C device with 7-bit address 0x2C
-    // i2c.write(0x2c, &[1, 2, 3]).unwrap(); // Abort(1) になる。宛先のアドレスのデバイスはないからそうなるのか。
-    // I2C addresses are tipically 7 bits long, 0..127
-    for address in 0..=127 {
-        match i2c.write(address, &[1]) {
-            Ok(_) => {
-                info!("Found device on address {}\n", address);
-            }
-            Err(_) => {}
+    loop {
+        // interrupts handle everything else in this example.
+        cortex_m::asm::wfi();
+    }
+}
+
+#[interrupt]
+fn IO_IRQ_BANK0() {
+    // The `#[interrupt]` attribute covertly converts this to `&'static mut Option<LedAndButton>`
+    static mut LED_AND_BUTTON_AND_ALARM: Option<LedAndButtonAndAlarm> = None;
+
+    // This is one-time lazy initialisation. We steal the variables given to us
+    // via `GLOBAL_PINS`.
+    if LED_AND_BUTTON_AND_ALARM.is_none() {
+        cortex_m::interrupt::free(|cs| {
+            *LED_AND_BUTTON_AND_ALARM = GLOBAL_PINS.borrow(cs).take();
+        });
+    }
+
+    // Need to check if our Option<LedAndButtonPins> contains our pins
+    if let Some(gpios) = LED_AND_BUTTON_AND_ALARM {
+        // borrow led and button by *destructuring* the tuple
+        // these will be of type `&mut LedPin` and `&mut ButtonPin`, so we don't have
+        // to move them back into the static after we use them
+        let (_, button, alarm) = gpios;
+        // Check if the interrupt source is from the push button going from high-to-low.
+        // Note: this will always be true in this example, as that is the only enabled GPIO interrupt source
+        if button.interrupt_status(EdgeHigh) {
+            info!("EdgeHigh");
+            // toggle can't fail, but the embedded-hal traits always allow for it
+            // we can discard the return value by assigning it to an unnamed variable
+            // let _ = led.toggle();
+
+            // Our interrupt doesn't clear itself.
+            // Do that now so we don't immediately jump back to this interrupt handler.
+            button.clear_interrupt(EdgeHigh);
+
+            alarm.schedule(10.millis()).unwrap();
         }
     }
-    // cf. https://github.com/JoaquinEduardoArreguez/stm32f1xx-rust-i2c-scanner/blob/c47a66b38b6b7a13e90d0b5543e7f2c598060c41/src/main.rs#L59
+}
 
-    let mut display = DisplayAQM0802::init_blocking(i2c, &mut timer).unwrap();
-    display
-        .print_blocking2("Hello!".as_bytes(), "  mi12cp".as_bytes())
-        .unwrap();
-    timer.delay_ms(2000);
+#[interrupt]
+fn TIMER_IRQ_0() {
+    static mut LED_AND_BUTTON_AND_ALARM: Option<LedAndButtonAndAlarm> = None;
+    info!("TIMER_IRQ_0");
 
-    let mut counter: u16 = 0; // 0 ~ 999, 1msごとに1カウントアップ
-    let mut is_lighting = false;
-    loop {
-        if counter % 500 == 0 {
-            if is_lighting {
-                led_pin.set_low().unwrap();
-            } else {
-                led_pin.set_high().unwrap();
-            }
-            is_lighting = !is_lighting;
-        }
+    if LED_AND_BUTTON_AND_ALARM.is_none() {
+        info!("is_none");
 
-        if counter == 0 {
-            let conversion_factor: f32 = 3.3 / 4096.0; // センサーは12bit。Pythonの例だと2^16で割っている
-            let reading: u16 = adc.read(&mut temperature_sensor).unwrap();
-            let reading: f32 = f32::from(reading) * conversion_factor;
+        cortex_m::interrupt::free(|cs| {
+            *LED_AND_BUTTON_AND_ALARM = GLOBAL_PINS.borrow(cs).take();
+        });
+    }
 
-            let temperature = 27f32 - (reading - 0.706) / 0.001721;
-            // https://github.com/raspberrypi/pico-micropython-examples/blob/master/adc/temperature.py
-            info!("ADC readings: Temperature: {}", temperature);
-
-            // 22.93ﾟC のような文字列にする
-            let display_string = alloc::format!("{:.1}", temperature);
-            let display_vec =
-                alloc::vec![display_string.as_bytes(), &[0b11011111], "C".as_bytes()].concat();
-            display.print_blocking(display_vec.as_slice()).unwrap();
+    if let Some(gpios) = LED_AND_BUTTON_AND_ALARM {
+        let (led, button, alarm) = gpios;
+        if button.is_high().unwrap() {
+            led.toggle().unwrap();
         }
-
-        if button_0.is_high().unwrap() {
-            led_0.set_high().unwrap();
-        } else {
-            led_0.set_low().unwrap();
-        }
-        if button_1.is_high().unwrap() {
-            led_1.set_high().unwrap();
-        } else {
-            led_1.set_low().unwrap();
-        }
-        if button_2.is_high().unwrap() {
-            led_2.set_high().unwrap();
-        } else {
-            led_2.set_low().unwrap();
-        }
-        if button_3.is_high().unwrap() {
-            led_3.set_high().unwrap();
-        } else {
-            led_3.set_low().unwrap();
-        }
-
-        if counter < 999 {
-            counter += 1
-        } else {
-            counter = 0
-        }
-        delay.delay_ms(1);
+        alarm.clear_interrupt()
+    } else {
+        info!("what happen?");
     }
 }
 
