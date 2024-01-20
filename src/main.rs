@@ -7,9 +7,9 @@
 use bsp::entry;
 use defmt::*;
 use defmt_rtt as _;
-use embedded_hal::digital::v2::OutputPin;
-use embedded_hal::blocking::i2c::Write;
 use embedded_hal::adc::OneShot;
+use embedded_hal::blocking::i2c::Write;
+use embedded_hal::digital::v2::{InputPin, OutputPin};
 use panic_probe as _;
 
 // Provide an alias for our BSP so we can switch targets quickly.
@@ -17,16 +17,15 @@ use panic_probe as _;
 use rp_pico as bsp;
 // use sparkfun_pro_micro_rp2040 as bsp;
 
+use bsp::hal::fugit::RateExtU32;
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
+    gpio::{FunctionI2C, Pin, PullUp},
     pac,
     sio::Sio,
     watchdog::Watchdog,
-    Adc,
-    I2C,
-    gpio::{FunctionI2C, Pin, PullUp}
+    Adc, I2C,
 };
-use bsp::hal::fugit::RateExtU32;
 
 #[entry]
 fn main() -> ! {
@@ -47,8 +46,8 @@ fn main() -> ! {
         &mut pac.RESETS,
         &mut watchdog,
     )
-        .ok()
-        .unwrap();
+    .ok()
+    .unwrap();
 
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
@@ -70,14 +69,24 @@ fn main() -> ! {
     // in series with the LED.
     let mut led_pin = pins.led.into_push_pull_output();
 
+    let button_0 = pins.gpio19.into_pull_down_input();
+    let button_1 = pins.gpio18.into_pull_down_input();
+    let button_2 = pins.gpio17.into_pull_down_input();
+    let button_3 = pins.gpio16.into_pull_down_input();
+
+    let mut led_0 = pins.gpio13.into_push_pull_output();
+    let mut led_1 = pins.gpio12.into_push_pull_output();
+    let mut led_2 = pins.gpio11.into_push_pull_output();
+    let mut led_3 = pins.gpio10.into_push_pull_output();
+
     // Enable ADC
     let mut adc = Adc::new(pac.ADC, &mut pac.RESETS);
     // // Enable the temperature sense channel
     let mut temperature_sensor = adc.take_temp_sensor().unwrap();
 
     // Configure two pins as being I²C, not GPIO
-    let sda_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio16.reconfigure();
-    let scl_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio17.reconfigure();
+    let sda_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio20.reconfigure();
+    let scl_pin: Pin<_, FunctionI2C, PullUp> = pins.gpio21.reconfigure();
     // Create the I²C drive, using the two pre-configured pins. This will fail
     // at compile time if the pins are in the wrong mode, or if this I²C
     // peripheral isn't available on these pins!
@@ -103,26 +112,55 @@ fn main() -> ! {
     }
     // cf. https://github.com/JoaquinEduardoArreguez/stm32f1xx-rust-i2c-scanner/blob/c47a66b38b6b7a13e90d0b5543e7f2c598060c41/src/main.rs#L59
 
+    let mut counter: u16 = 0; // 0 ~ 999, 1msごとに1カウントアップ
     let mut is_lighting = false;
     loop {
-        if is_lighting {
-            led_pin.set_low().unwrap();
-        } else {
-            led_pin.set_high().unwrap();
+        if counter % 500 == 0 {
+            if is_lighting {
+                led_pin.set_low().unwrap();
+            } else {
+                led_pin.set_high().unwrap();
+            }
+            is_lighting = !is_lighting;
         }
-        is_lighting = !is_lighting;
 
-        let conversion_factor: f32 = 3.3 / 4096.0; // センサーは12bit。Pythonの例だと2^16で割っている
-        let reading: u16 = adc.read(&mut temperature_sensor).unwrap();
-        let reading: f32 = f32::from(reading) * conversion_factor;
+        if counter == 0 {
+            let conversion_factor: f32 = 3.3 / 4096.0; // センサーは12bit。Pythonの例だと2^16で割っている
+            let reading: u16 = adc.read(&mut temperature_sensor).unwrap();
+            let reading: f32 = f32::from(reading) * conversion_factor;
 
-        let temperature = 27f32 - (reading - 0.706) / 0.001721;
-        // https://github.com/raspberrypi/pico-micropython-examples/blob/master/adc/temperature.py
-        info!(
-            "ADC readings: Temperature: {}",
-            temperature
-        );
-        delay.delay_ms(1000);
+            let temperature = 27f32 - (reading - 0.706) / 0.001721;
+            // https://github.com/raspberrypi/pico-micropython-examples/blob/master/adc/temperature.py
+            info!("ADC readings: Temperature: {}", temperature);
+        }
+
+        if button_0.is_high().unwrap() {
+            led_0.set_high().unwrap();
+        } else {
+            led_0.set_low().unwrap();
+        }
+        if button_1.is_high().unwrap() {
+            led_1.set_high().unwrap();
+        } else {
+            led_1.set_low().unwrap();
+        }
+        if button_2.is_high().unwrap() {
+            led_2.set_high().unwrap();
+        } else {
+            led_2.set_low().unwrap();
+        }
+        if button_3.is_high().unwrap() {
+            led_3.set_high().unwrap();
+        } else {
+            led_3.set_low().unwrap();
+        }
+
+        if counter < 999 {
+            counter += 1
+        } else {
+            counter = 0
+        }
+        delay.delay_ms(1);
     }
 }
 
