@@ -141,8 +141,10 @@ fn main() -> ! {
     // cf. https://github.com/JoaquinEduardoArreguez/stm32f1xx-rust-i2c-scanner/blob/c47a66b38b6b7a13e90d0b5543e7f2c598060c41/src/main.rs#L59
 
     let mut display = DisplayAQM0802::init_blocking(i2c, &mut timer).unwrap();
-    display.print_blocking("Hello!".as_bytes()).unwrap();
-    timer.delay_ms(1000);
+    display
+        .print_blocking2("Hello!".as_bytes(), "  mi12cp".as_bytes())
+        .unwrap();
+    timer.delay_ms(2000);
 
     let mut counter: u16 = 0; // 0 ~ 999, 1msごとに1カウントアップ
     let mut is_lighting = false;
@@ -166,7 +168,7 @@ fn main() -> ! {
             info!("ADC readings: Temperature: {}", temperature);
 
             // 22.93ﾟC のような文字列にする
-            let display_string = alloc::format!("{:.2}", temperature);
+            let display_string = alloc::format!("{:.1}", temperature);
             let display_vec =
                 alloc::vec![display_string.as_bytes(), &[0b11011111], "C".as_bytes()].concat();
             display.print_blocking(display_vec.as_slice()).unwrap();
