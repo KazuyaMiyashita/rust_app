@@ -154,8 +154,13 @@ fn main() -> ! {
     }
 
     info!("into loop...");
-    writeln!(console, "hello1").unwrap();
-    writeln!(console, "hello2").unwrap();
+    writeln!(console, "Hello!").unwrap();
+
+    for _ in 0..=7 {
+        write!(console, ".").unwrap();
+        timer.delay_ms(250);
+    }
+    writeln!(console).unwrap();
 
     let mut counter = 0;
     loop {
@@ -167,7 +172,7 @@ fn main() -> ! {
         });
         if button_pressed {
             counter += 1;
-            writeln!(console, "abcde{}b", counter).unwrap();
+            writeln!(console, "c:{}", counter).unwrap();
         }
 
         timer.delay_ms(10);
