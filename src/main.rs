@@ -5,18 +5,23 @@
 #![no_main]
 #![feature(alloc_error_handler)]
 
+mod console;
+mod display_aqm0802;
+
 use bsp::entry;
-use defmt::*;
+use defmt::{debug, error, info};
 use defmt_rtt as _;
 use panic_probe as _;
 
 use rp_pico as bsp;
 
+use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::{InputPin, ToggleableOutputPin};
 
+use bsp::hal::fugit::RateExtU32;
 use bsp::hal::{
     clocks::init_clocks_and_plls, gpio, gpio::Interrupt::EdgeHigh, pac, sio::Sio,
-    watchdog::Watchdog, Timer,
+    watchdog::Watchdog, Timer, I2C,
 };
 
 use bsp::hal::pac::interrupt;
@@ -25,6 +30,9 @@ use fugit::ExtU32;
 
 use core::cell::RefCell;
 use critical_section::Mutex;
+
+use crate::console::Console;
+use core::fmt::Write;
 
 use alloc_cortex_m::CortexMHeap;
 use core::alloc::Layout;
@@ -55,6 +63,8 @@ type LedAndButtonAndAlarm = (LedPin, ButtonPin, Alarm0);
 /// We'll have the option hold both using the LedAndButton type.
 /// This will make it a bit easier to unpack them later.
 static GLOBALS: Mutex<RefCell<Option<LedAndButtonAndAlarm>>> = Mutex::new(RefCell::new(None));
+
+static GLOBAL_BUTTON_PRESSED: Mutex<RefCell<bool>> = Mutex::new(RefCell::new(false));
 
 #[global_allocator]
 static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
@@ -117,6 +127,23 @@ fn main() -> ! {
         GLOBALS.borrow(cs).replace(Some((led, in_pin, alarm)));
     });
 
+    // Configure two pins as being I²C, not GPIO
+    let sda_pin: gpio::Pin<_, gpio::FunctionI2C, gpio::PullUp> = pins.gpio20.reconfigure();
+    let scl_pin: gpio::Pin<_, gpio::FunctionI2C, gpio::PullUp> = pins.gpio21.reconfigure();
+    // Create the I²C drive, using the two pre-configured pins. This will fail
+    // at compile time if the pins are in the wrong mode, or if this I²C
+    // peripheral isn't available on these pins!
+    let i2c = I2C::i2c0(
+        pac.I2C0,
+        sda_pin,
+        scl_pin, // Try `not_an_scl_pin` here
+        400.kHz(),
+        &mut pac.RESETS,
+        &clocks.system_clock,
+    );
+
+    let mut console = Console::init_blocking(i2c, &mut timer).unwrap();
+
     // Unmask the IO_BANK0 IRQ so that the NVIC interrupt controller
     // will jump to the interrupt function when the interrupt occurs.
     // We do this last so that the interrupt can't go off while
@@ -127,9 +154,25 @@ fn main() -> ! {
     }
 
     info!("into loop...");
+    writeln!(console, "hello1").unwrap();
+    writeln!(console, "hello2").unwrap();
+
+    let mut counter = 0;
     loop {
+        let mut button_pressed = false;
+        critical_section::with(|cs| {
+            if GLOBAL_BUTTON_PRESSED.borrow(cs).replace(false) {
+                button_pressed = true;
+            }
+        });
+        if button_pressed {
+            counter += 1;
+            writeln!(console, "abcde{}b", counter).unwrap();
+        }
+
+        timer.delay_ms(10);
         // interrupts handle everything else in this example.
-        cortex_m::asm::wfi();
+        // cortex_m::asm::wfi();
     }
 }
 
@@ -163,10 +206,12 @@ fn TIMER_IRQ_0() {
 
     critical_section::with(|cs| {
         let mut binding = GLOBALS.borrow_ref_mut(cs);
+        let button_pressed = GLOBAL_BUTTON_PRESSED.borrow(cs);
         let (ref mut led, ref mut button, ref mut alarm) = binding.as_mut().unwrap();
 
         if button.is_high().unwrap() {
             info!("BUTTON PRESSED!");
+            button_pressed.replace(true);
 
             led.toggle().unwrap();
         }
