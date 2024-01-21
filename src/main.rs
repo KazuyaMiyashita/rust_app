@@ -24,7 +24,7 @@ use bsp::hal::pac::interrupt;
 use fugit::ExtU32;
 
 use core::cell::RefCell;
-use cortex_m::interrupt::Mutex;
+use critical_section::Mutex;
 
 use alloc_cortex_m::CortexMHeap;
 use core::alloc::Layout;
@@ -54,7 +54,7 @@ type LedAndButtonAndAlarm = (LedPin, ButtonPin, Alarm0);
 /// This how we transfer our Led and Button pins into the Interrupt Handler.
 /// We'll have the option hold both using the LedAndButton type.
 /// This will make it a bit easier to unpack them later.
-static GLOBAL_PINS: Mutex<RefCell<Option<LedAndButtonAndAlarm>>> = Mutex::new(RefCell::new(None));
+static GLOBALS: Mutex<RefCell<Option<LedAndButtonAndAlarm>>> = Mutex::new(RefCell::new(None));
 
 #[global_allocator]
 static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
@@ -113,11 +113,8 @@ fn main() -> ! {
 
     // Give away our pins by moving them into the `GLOBAL_PINS` variable.
     // We won't need to access them in the main thread again
-    // critical_section::with(|cs| {
-    //     GLOBAL_PINS.borrow(cs).replace(Some((led, in_pin)));
-    // });
-    cortex_m::interrupt::free(|cs| {
-        GLOBAL_PINS.borrow(cs).replace(Some((led, in_pin, alarm)));
+    critical_section::with(|cs| {
+        GLOBALS.borrow(cs).replace(Some((led, in_pin, alarm)));
     });
 
     // Unmask the IO_BANK0 IRQ so that the NVIC interrupt controller
@@ -129,6 +126,7 @@ fn main() -> ! {
         pac::NVIC::unmask(pac::Interrupt::TIMER_IRQ_0);
     }
 
+    info!("into loop...");
     loop {
         // interrupts handle everything else in this example.
         cortex_m::asm::wfi();
@@ -137,27 +135,15 @@ fn main() -> ! {
 
 #[interrupt]
 fn IO_IRQ_BANK0() {
-    // The `#[interrupt]` attribute covertly converts this to `&'static mut Option<LedAndButton>`
-    static mut LED_AND_BUTTON_AND_ALARM: Option<LedAndButtonAndAlarm> = None;
+    debug!("IO_IRQ_BANK0");
 
-    // This is one-time lazy initialisation. We steal the variables given to us
-    // via `GLOBAL_PINS`.
-    if LED_AND_BUTTON_AND_ALARM.is_none() {
-        cortex_m::interrupt::free(|cs| {
-            *LED_AND_BUTTON_AND_ALARM = GLOBAL_PINS.borrow(cs).take();
-        });
-    }
-
-    // Need to check if our Option<LedAndButtonPins> contains our pins
-    if let Some(gpios) = LED_AND_BUTTON_AND_ALARM {
-        // borrow led and button by *destructuring* the tuple
-        // these will be of type `&mut LedPin` and `&mut ButtonPin`, so we don't have
-        // to move them back into the static after we use them
-        let (_, button, alarm) = gpios;
+    critical_section::with(|cs| {
+        let mut binding = GLOBALS.borrow_ref_mut(cs);
+        let (_, ref mut button, ref mut alarm) = binding.as_mut().unwrap();
         // Check if the interrupt source is from the push button going from high-to-low.
         // Note: this will always be true in this example, as that is the only enabled GPIO interrupt source
         if button.interrupt_status(EdgeHigh) {
-            info!("EdgeHigh");
+            debug!("EdgeHigh");
             // toggle can't fail, but the embedded-hal traits always allow for it
             // we can discard the return value by assigning it to an unnamed variable
             // let _ = led.toggle();
@@ -168,31 +154,24 @@ fn IO_IRQ_BANK0() {
 
             alarm.schedule(10.millis()).unwrap();
         }
-    }
+    })
 }
 
 #[interrupt]
 fn TIMER_IRQ_0() {
-    static mut LED_AND_BUTTON_AND_ALARM: Option<LedAndButtonAndAlarm> = None;
-    info!("TIMER_IRQ_0");
+    debug!("TIMER_IRQ_0");
 
-    if LED_AND_BUTTON_AND_ALARM.is_none() {
-        info!("is_none");
+    critical_section::with(|cs| {
+        let mut binding = GLOBALS.borrow_ref_mut(cs);
+        let (ref mut led, ref mut button, ref mut alarm) = binding.as_mut().unwrap();
 
-        cortex_m::interrupt::free(|cs| {
-            *LED_AND_BUTTON_AND_ALARM = GLOBAL_PINS.borrow(cs).take();
-        });
-    }
-
-    if let Some(gpios) = LED_AND_BUTTON_AND_ALARM {
-        let (led, button, alarm) = gpios;
         if button.is_high().unwrap() {
+            info!("BUTTON PRESSED!");
+
             led.toggle().unwrap();
         }
         alarm.clear_interrupt()
-    } else {
-        info!("what happen?");
-    }
+    })
 }
 
 // End of file
