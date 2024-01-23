@@ -10,32 +10,27 @@ mod console;
 mod display_aqm0802;
 
 use bsp::entry;
-use defmt::{debug, error, info};
+use defmt::{error, info};
 use defmt_rtt as _;
 use panic_probe as _;
 
 use rp_pico as bsp;
 
 use embedded_hal::blocking::delay::DelayMs;
-use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_hal::digital::v2::OutputPin;
 
 use bsp::hal::fugit::RateExtU32;
-use bsp::hal::{
-    clocks::init_clocks_and_plls, gpio, gpio::Interrupt::EdgeHigh, pac, sio::Sio,
-    watchdog::Watchdog, Timer, I2C,
-};
-
-use fugit::ExtU32;
+use bsp::hal::{clocks::init_clocks_and_plls, gpio, pac, sio::Sio, watchdog::Watchdog, Timer, I2C};
 
 use crate::console::Console;
 use core::fmt::Write;
 
 use alloc_cortex_m::CortexMHeap;
 use core::alloc::Layout;
-use rp_pico::hal::timer::Alarm;
 
 extern crate alloc;
 
+use crate::button_interrupt::ButtonInput;
 use button_interrupt::ButtonInterrupt;
 
 // Pin types quickly become very long!
@@ -79,8 +74,6 @@ fn main() -> ! {
     .unwrap();
 
     let mut timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
-    let mut alarm = timer.alarm_0().unwrap();
-    alarm.enable_interrupt();
 
     let pins = bsp::Pins::new(
         pac.IO_BANK0,
@@ -109,11 +102,12 @@ fn main() -> ! {
 
     let mut console = Console::init_blocking(i2c, &mut timer).unwrap();
 
-    let button_interrupt = ButtonInterrupt::init(
+    let button_interrupt = ButtonInterrupt::enable_interrupt(
         pins.gpio19.reconfigure(),
         pins.gpio18.reconfigure(),
         pins.gpio17.reconfigure(),
         pins.gpio16.reconfigure(),
+        timer.alarm_0().unwrap(),
     );
 
     info!("into loop...");
@@ -127,10 +121,10 @@ fn main() -> ! {
 
     let mut counter = 0;
     loop {
-        let mut button_pressed = false;
-        let _ = button_interrupt.pop();
-
-        if button_pressed {
+        if button_interrupt
+            .pop_button_inputs()
+            .contains(&ButtonInput::Button0)
+        {
             counter += 1;
             writeln!(console, "c:{}", counter).unwrap();
         }
