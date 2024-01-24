@@ -5,7 +5,7 @@
 #![no_main]
 #![feature(alloc_error_handler)]
 
-mod button_interrupt;
+mod button_input_queue;
 mod console;
 mod display_aqm0802;
 
@@ -30,8 +30,8 @@ use core::alloc::Layout;
 
 extern crate alloc;
 
-use crate::button_interrupt::ButtonInput;
-use button_interrupt::ButtonInterrupt;
+use crate::button_input_queue::ButtonInput;
+use button_input_queue::ButtonInputQueue;
 
 // Pin types quickly become very long!
 // We'll create some type aliases using `type` to help with that
@@ -102,11 +102,12 @@ fn main() -> ! {
 
     let mut console = Console::init_blocking(i2c, &mut timer).unwrap();
 
-    let button_interrupt = ButtonInterrupt::enable_interrupt(
+    ButtonInputQueue::init(
         pins.gpio19.reconfigure(),
         pins.gpio18.reconfigure(),
         pins.gpio17.reconfigure(),
         pins.gpio16.reconfigure(),
+        timer,
         timer.alarm_0().unwrap(),
     );
 
@@ -121,8 +122,7 @@ fn main() -> ! {
 
     let mut counter = 0;
     loop {
-        if button_interrupt
-            .pop_button_inputs()
+        if ButtonInputQueue::pop_all()
             .contains(&ButtonInput::Button0)
         {
             counter += 1;
