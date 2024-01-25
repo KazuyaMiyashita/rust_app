@@ -6,6 +6,7 @@
 #![feature(alloc_error_handler)]
 
 mod button_input_queue;
+mod scheduler;
 mod console;
 mod display_aqm0802;
 
@@ -32,6 +33,7 @@ extern crate alloc;
 
 use crate::button_input_queue::ButtonInput;
 use button_input_queue::ButtonInputQueue;
+use crate::scheduler::Scheduler;
 
 // Pin types quickly become very long!
 // We'll create some type aliases using `type` to help with that
@@ -74,6 +76,8 @@ fn main() -> ! {
     .unwrap();
 
     let mut timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
+
+    Scheduler::init(timer, timer.alarm_1().unwrap());
 
     let pins = bsp::Pins::new(
         pac.IO_BANK0,
@@ -136,7 +140,7 @@ fn main() -> ! {
         // info!("{:02}{:02}{:02}{:02}", counter[0], counter[1], counter[2], counter[3]);
         writeln!(console, "{:2}{:2}{:2}{:2}", counter[0], counter[1], counter[2], counter[3]).unwrap();
 
-        timer.delay_ms(1);
+        timer.delay_ms(10);
         // interrupts handle everything else in this example.
         // cortex_m::asm::wfi();
     }
