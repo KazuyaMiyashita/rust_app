@@ -1,5 +1,5 @@
 /// 割り込みを利用してボタンの入力をキューにためる
-use defmt::{debug, info, warn, Format};
+use defmt::{info, warn, Format};
 
 use alloc::vec::Vec;
 use bsp::hal::fugit::ExtU32;
@@ -77,46 +77,25 @@ impl ButtonInterrupts {
     // (先にセットされたタイマーが動いたときに次のタイマーが設定される)
     fn on_button_edge_high(&mut self, button_input: ButtonInput) {
         let now: fugit::Instant<u64, 1, 1000000> = self.timer.get_counter();
-        if self.button0.is_none()
-            && self.button1.is_none()
-            && self.button2.is_none()
-            && self.button3.is_none()
-        {
+
+        let is_schedule_empty_or_old = [
+            self.button0, self.button1, self.button2, self.button3
+        ].iter().any(|b| b.is_none() || b.map_or(false, |t| t < now));
+
+        if is_schedule_empty_or_old {
             match button_input {
                 ButtonInput::Button0 => self.button0 = Some(now),
-                ButtonInput::Button1 => self.button0 = Some(now),
-                ButtonInput::Button2 => self.button0 = Some(now),
-                ButtonInput::Button3 => self.button0 = Some(now),
+                ButtonInput::Button1 => self.button1 = Some(now),
+                ButtonInput::Button2 => self.button2 = Some(now),
+                ButtonInput::Button3 => self.button3 = Some(now),
             }
             self.alarm.schedule_at(now + 10.millis()).unwrap();
-        } else {
-            match button_input {
-                ButtonInput::Button0 => match self.button0 {
-                    None => self.button0 = Some(now),
-                    Some(t) if t > now => self.button0 = Some(now),
-                    Some(_) => (),
-                },
-                ButtonInput::Button1 => match self.button0 {
-                    None => self.button1 = Some(now),
-                    Some(t) if t > now => self.button1 = Some(now),
-                    Some(_) => (),
-                },
-                ButtonInput::Button2 => match self.button0 {
-                    None => self.button2 = Some(now),
-                    Some(t) if t > now => self.button2 = Some(now),
-                    Some(_) => (),
-                },
-                ButtonInput::Button3 => match self.button0 {
-                    None => self.button3 = Some(now),
-                    Some(t) if t > now => self.button3 = Some(now),
-                    Some(_) => (),
-                },
-            }
         }
     }
 
+    // on_button_edge_high の時に設定したタイマーが呼ばれた時に、どのボタンによって設定されたのかを返す
+    // 次のタイマーがあればそれを設定し、なければタイマーの割り込みをクリア
     fn get_event_and_set_next(&mut self) -> Option<ButtonInput> {
-
         let mut buttons = [
             (ButtonInput::Button0, self.button0),
             (ButtonInput::Button1, self.button1),
@@ -126,22 +105,32 @@ impl ButtonInterrupts {
         buttons.sort_by(|a, b| a.1.cmp(&b.1)); 
         // Noneは小さい扱い
 
-        let some_pos = buttons.iter().position(|x| x.1.is_some());
-        match some_pos {
-            None => {
-                warn!("all buttons is none. why?");
-                None
-            },
-            Some(p) if p < 4 =>  {
-                let next_time = buttons[p+1].1.unwrap();
-                self.alarm.schedule_at(next_time + 10.millis()).unwrap();
-                Some(buttons[p].0)
-            },
-            Some(p) => {
-                // 次にセットするタイマーはない。
-                Some(buttons[p].0)
+        let mut maybe_current_button = None;
+        let mut maybe_next_time = None;
+
+        for (b, maybe_time) in buttons {
+            if let Some(time) = maybe_time {
+                if maybe_next_time.is_none() && maybe_current_button.is_some() { maybe_next_time = Some(time) }
+                if maybe_current_button.is_none() { maybe_current_button = Some(b) }
             }
         }
+
+        if let Some(current_button) = maybe_current_button {
+            match current_button {
+                ButtonInput::Button0 => self.button0 = None,
+                ButtonInput::Button1 => self.button1 = None,
+                ButtonInput::Button2 => self.button2 = None,
+                ButtonInput::Button3 => self.button3 = None,
+            }
+        }
+
+        if let Some(next_time) = maybe_next_time {
+            self.alarm.schedule_at(next_time + 10.millis()).unwrap();
+        } else {
+            self.alarm.clear_interrupt();
+        }
+
+        maybe_current_button
     }
 }
 
@@ -214,7 +203,7 @@ impl ButtonInputQueue {
 
     // 追加できたら Some(()), バッファが足りなかくて追加できなかったら None
     fn push(&mut self, v: ButtonInput) -> Option<()> {
-        if self.cursor <= BUTTON_INPUT_QUEUE_LENGTH {
+        if self.cursor < BUTTON_INPUT_QUEUE_LENGTH {
             self.buffer[self.cursor] = v;
             self.cursor += 1;
             Some(())
@@ -229,8 +218,6 @@ impl ButtonInputQueue {
 #[interrupt]
 fn IO_IRQ_BANK0() {
     critical_section::with(|cs| {
-        debug!("IO_IRQ_BANK0");
-
         let mut button_pins_binding = GLOBAL_BUTTON_PINS.borrow(cs).borrow_mut();
         let button_pins = button_pins_binding.as_mut().unwrap();
 
@@ -266,7 +253,6 @@ fn IO_IRQ_BANK0() {
 
         for maybe_button in innterrupted_buttons.iter() {
             if let Some(button) = maybe_button {
-                debug!("{} EdgeHigh", button);
                 button_interrupts.on_button_edge_high(*button)
             }
         }
@@ -278,8 +264,6 @@ fn IO_IRQ_BANK0() {
 #[interrupt]
 fn TIMER_IRQ_0() {
     critical_section::with(|cs| {
-        debug!("TIMER_IRQ_0");
-
         let mut button_pins_binding = GLOBAL_BUTTON_PINS.borrow(cs).borrow_mut();
         let button_pins = button_pins_binding.as_mut().unwrap();
 
@@ -289,9 +273,9 @@ fn TIMER_IRQ_0() {
         let mut button_input_queue_binding = GLOBAL_BUTTON_INPUT_QUEUE.borrow(cs).borrow_mut();
         let button_input_queue = button_input_queue_binding.as_mut().unwrap();
 
-        let maybe_button_event = button_interrupts.get_event_and_set_next();
-        if let Some(button_event) = maybe_button_event {
-            match button_event {
+        let maybe_button_interrupt = button_interrupts.get_event_and_set_next();
+        if let Some(button_interrupt) = maybe_button_interrupt {
+            match button_interrupt {
                 ButtonInput::Button0 => {
                     if button_pins.button0.is_high().unwrap() {
                         info!("Button0 pushed!");

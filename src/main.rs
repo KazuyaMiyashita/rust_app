@@ -116,20 +116,27 @@ fn main() -> ! {
 
     for _ in 0..=7 {
         write!(console, ".").unwrap();
-        timer.delay_ms(250);
+        timer.delay_ms(100);
     }
     writeln!(console).unwrap();
 
-    let mut counter = 0;
+    let mut counter = [0, 0, 0, 0];
     loop {
-        if ButtonInputQueue::pop_all()
-            .contains(&ButtonInput::Button0)
-        {
-            counter += 1;
-            writeln!(console, "c:{}", counter).unwrap();
+        let pushed_buttons = ButtonInputQueue::pop_all();
+        if pushed_buttons.contains(&ButtonInput::Button0) {
+            counter[0] += 1;
+        } else if pushed_buttons.contains(&ButtonInput::Button1) {
+            counter[1] += 1;
+        }  else if pushed_buttons.contains(&ButtonInput::Button2) {
+            counter[2] += 1;
+        }  else if pushed_buttons.contains(&ButtonInput::Button3) {
+            counter[3] += 1;
         }
 
-        timer.delay_ms(10);
+        // info!("{:02}{:02}{:02}{:02}", counter[0], counter[1], counter[2], counter[3]);
+        writeln!(console, "{:2}{:2}{:2}{:2}", counter[0], counter[1], counter[2], counter[3]).unwrap();
+
+        timer.delay_ms(1);
         // interrupts handle everything else in this example.
         // cortex_m::asm::wfi();
     }
