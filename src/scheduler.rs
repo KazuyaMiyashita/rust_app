@@ -1,18 +1,18 @@
 /// 割り込みを利用してボタンの入力をキューにためる
-use defmt::{info, warn, Format};
+// use defmt::{info, warn, Format};
 
-use bsp::hal::fugit::ExtU32;
+use alloc::boxed::Box;
 use bsp::hal::{pac, pac::interrupt};
 use core::cell::RefCell;
 use critical_section::Mutex;
 use rp_pico as bsp;
-use rp_pico::hal::timer::{Alarm, Alarm1, Instant};
+use rp_pico::hal::timer::{Alarm, Alarm1};
 use rp_pico::hal::Timer;
 use fugit::MicrosDurationU32;
 
 const BUTTON_SCHEDULER_QUEUE_LENGTH: usize = 20;
 pub struct Scheduler {
-    buffer: [fn () -> (); BUTTON_SCHEDULER_QUEUE_LENGTH],
+    buffer: [Box<dyn Fn() -> ()>; BUTTON_SCHEDULER_QUEUE_LENGTH],
     cursor: usize, // 次にバッファに書き込む位置。
     timer: Timer,
     alarm: Alarm1,
@@ -54,8 +54,15 @@ impl Scheduler {
         }
     }
 
-    pub fn set(countdown: MicrosDurationU32, _f: fn () -> ()) {
-      todo!();
+    pub fn set(countdown: MicrosDurationU32, f: Box<dyn Fn() -> ()>) {
+
+      critical_section::with(|cs| {
+        let mut button_input_queue_binding = GLOBAL_BUTTON_INPUT_QUEUE.borrow(cs).borrow_mut();
+        let button_input_queue = button_input_queue_binding.as_mut().unwrap();
+
+        button_input_queue.buffer[0] = f; // TODO
+        button_input_queue.alarm.schedule(countdown).unwrap();
+      })
     }
 
 }

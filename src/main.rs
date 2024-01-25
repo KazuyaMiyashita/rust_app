@@ -22,6 +22,8 @@ use embedded_hal::digital::v2::OutputPin;
 
 use bsp::hal::fugit::RateExtU32;
 use bsp::hal::{clocks::init_clocks_and_plls, gpio, pac, sio::Sio, watchdog::Watchdog, Timer, I2C};
+use bsp::hal::fugit::ExtU32;
+
 
 use crate::console::Console;
 use core::fmt::Write;
@@ -115,6 +117,11 @@ fn main() -> ! {
         timer.alarm_0().unwrap(),
     );
 
+    let mut led_0 = pins.gpio13.into_push_pull_output();
+    // let mut led_1 = pins.gpio12.into_push_pull_output();
+    // let mut led_2 = pins.gpio11.into_push_pull_output();
+    // let mut led_3 = pins.gpio10.into_push_pull_output();
+
     info!("into loop...");
     writeln!(console, "Hello!").unwrap();
 
@@ -129,6 +136,10 @@ fn main() -> ! {
         let pushed_buttons = ButtonInputQueue::pop_all();
         if pushed_buttons.contains(&ButtonInput::Button0) {
             counter[0] += 1;
+            led_0.set_high().unwrap();
+            Scheduler::set(500.millis(), || {
+                led_0.set_low().unwrap();
+            });
         } else if pushed_buttons.contains(&ButtonInput::Button1) {
             counter[1] += 1;
         }  else if pushed_buttons.contains(&ButtonInput::Button2) {
