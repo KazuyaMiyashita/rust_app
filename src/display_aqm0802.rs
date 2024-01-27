@@ -78,7 +78,7 @@ where
         timer.delay_ms(200);
         for op in INIT_2 {
             i2c.write(DISPLAY_I2C_ADDR, &[SETTING, op])?;
-            timer.delay_ms(27);
+            timer.delay_us(27);
         }
         timer.delay_us(1080);
 
@@ -105,8 +105,7 @@ where
 
     // 最大8文字*2行の文字列を表示する。2行それぞれ指定するバージョン。
     pub fn print_blocking2(&mut self, line0: &[u8], line1: &[u8]) -> Result<(), Error> {
-        self.i2c.write(DISPLAY_I2C_ADDR, &[SETTING, 0x01])?; // Clear Display
-        self.timer.delay_ms(2);
+        self.clear_display()?;
 
         for b in line0.iter().take(8) {
             self.i2c.write(DISPLAY_I2C_ADDR, &[DISPLAY, b.clone()])?;
@@ -114,11 +113,18 @@ where
 
         // 2行目の先頭へ(Set DDDRAM address. Wait time > 26.3 μs)
         self.i2c.write(DISPLAY_I2C_ADDR, &[SETTING, 0xC0])?;
-        self.timer.delay_ms(27);
+        self.timer.delay_us(27);
 
         for b in line1.iter().take(8) {
             self.i2c.write(DISPLAY_I2C_ADDR, &[DISPLAY, b.clone()])?;
         }
+
+        Ok(())
+    }
+
+    pub fn clear_display(&mut self) -> Result<(), Error> {
+        self.i2c.write(DISPLAY_I2C_ADDR, &[SETTING, 0x01])?; // Clear Display
+        self.timer.delay_us(1081);
 
         Ok(())
     }

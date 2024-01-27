@@ -14,6 +14,8 @@ pub struct Console<I2C: Write> {
     next_new_line: bool,
 }
 
+const BUFFER_EMPTY: [[u8; 8]; 2] = [[0x20u8; 8]; 2];
+
 impl<I2C> Console<I2C>
 where
     I2C: Write,
@@ -21,13 +23,23 @@ where
 {
     pub fn init_blocking(i2c: I2C, timer: &mut Timer) -> Result<Self, Error> {
         let display = DisplayAQM0802::init_blocking(i2c, timer)?;
-        let buffer = [[0x20u8; 8]; 2];
+        let buffer = BUFFER_EMPTY;
         Ok(Console {
             display,
             buffer,
             cursor: 0,
             next_new_line: false,
         })
+    }
+
+    pub fn clear(&mut self) -> Result<(), Error> {
+        self.buffer = BUFFER_EMPTY;
+        self.cursor = 0;
+        self.next_new_line = false;
+
+        self.display.clear_display()?;
+
+        Ok(())
     }
 
     fn add_char(&mut self, c: &u8) -> () {

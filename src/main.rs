@@ -6,9 +6,9 @@
 #![feature(alloc_error_handler)]
 
 mod button_input_queue;
-mod scheduler;
 mod console;
 mod display_aqm0802;
+mod led_pins;
 
 use bsp::entry;
 use defmt::{error, info};
@@ -20,10 +20,9 @@ use rp_pico as bsp;
 use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::digital::v2::OutputPin;
 
+use bsp::hal::fugit::ExtU32;
 use bsp::hal::fugit::RateExtU32;
 use bsp::hal::{clocks::init_clocks_and_plls, gpio, pac, sio::Sio, watchdog::Watchdog, Timer, I2C};
-// use bsp::hal::fugit::ExtU32;
-
 
 use crate::console::Console;
 use core::fmt::Write;
@@ -34,8 +33,8 @@ use core::alloc::Layout;
 extern crate alloc;
 
 use crate::button_input_queue::ButtonInput;
+use crate::led_pins::{Command, LedPinsComponent};
 use button_input_queue::ButtonInputQueue;
-// use crate::scheduler::Scheduler;
 
 // Pin types quickly become very long!
 // We'll create some type aliases using `type` to help with that
@@ -117,10 +116,14 @@ fn main() -> ! {
         timer.alarm_0().unwrap(),
     );
 
-    let mut led_0 = pins.gpio13.into_push_pull_output();
-    // let mut led_1 = pins.gpio12.into_push_pull_output();
-    // let mut led_2 = pins.gpio11.into_push_pull_output();
-    // let mut led_3 = pins.gpio10.into_push_pull_output();
+    LedPinsComponent::init(
+        pins.gpio13.into_push_pull_output(),
+        pins.gpio12.into_push_pull_output(),
+        pins.gpio11.into_push_pull_output(),
+        pins.gpio10.into_push_pull_output(),
+        timer,
+        timer.alarm_1().unwrap(),
+    );
 
     info!("into loop...");
     writeln!(console, "Hello!").unwrap();
@@ -129,27 +132,40 @@ fn main() -> ! {
         write!(console, ".").unwrap();
         timer.delay_ms(100);
     }
-    writeln!(console).unwrap();
+    console.clear().unwrap();
 
     let mut counter = [0, 0, 0, 0];
     loop {
         let pushed_buttons = ButtonInputQueue::pop_all();
         if pushed_buttons.contains(&ButtonInput::Button0) {
             counter[0] += 1;
-            led_0.set_high().unwrap();
-            // Scheduler::set(500.millis(), || {
-            //     led_0.set_low().unwrap();
-            // });
+            writeln!(console, "0: {}", counter[0]).unwrap();
+            LedPinsComponent::set(0, Command::HIGH);
+            LedPinsComponent::set_later(0, Command::LOW, 500.millis());
         } else if pushed_buttons.contains(&ButtonInput::Button1) {
             counter[1] += 1;
-        }  else if pushed_buttons.contains(&ButtonInput::Button2) {
+            writeln!(console, "1: {}", counter[1]).unwrap();
+            LedPinsComponent::set(1, Command::HIGH);
+            LedPinsComponent::set_later(1, Command::LOW, 500.millis());
+        } else if pushed_buttons.contains(&ButtonInput::Button2) {
             counter[2] += 1;
-        }  else if pushed_buttons.contains(&ButtonInput::Button3) {
+            writeln!(console, "2: {}", counter[2]).unwrap();
+            LedPinsComponent::set(2, Command::HIGH);
+            LedPinsComponent::set_later(2, Command::LOW, 500.millis());
+        } else if pushed_buttons.contains(&ButtonInput::Button3) {
             counter[3] += 1;
+            writeln!(console, "3: {}", counter[3]).unwrap();
+            LedPinsComponent::set(3, Command::HIGH);
+            LedPinsComponent::set_later(3, Command::LOW, 500.millis());
         }
 
         // info!("{:02}{:02}{:02}{:02}", counter[0], counter[1], counter[2], counter[3]);
-        writeln!(console, "{:2}{:2}{:2}{:2}", counter[0], counter[1], counter[2], counter[3]).unwrap();
+        // writeln!(
+        //     console,
+        //     "{:2}{:2}{:2}{:2}",
+        //     counter[0], counter[1], counter[2], counter[3]
+        // )
+        // .unwrap();
 
         timer.delay_ms(10);
         // interrupts handle everything else in this example.
