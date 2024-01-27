@@ -34,6 +34,10 @@ where
         }
     }
 
+    pub fn peek(&self) -> Option<&T> {
+        self.heap.get(0).and_then(|opt| opt.as_ref())
+    }
+
     pub fn pop(&mut self) -> Option<T> {
         if self.size > 0 {
             let root = self.heap[0].take();
@@ -96,10 +100,16 @@ where
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, Ord)]
 struct ScheduledPinsCommand {
     schedule: Instant,
     pins_command: PinsCommand,
+}
+
+impl PartialOrd for ScheduledPinsCommand {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        other.schedule.partial_cmp(&self.schedule)
+    }
 }
 
 impl defmt::Format for ScheduledPinsCommand {
@@ -208,9 +218,6 @@ impl LedPinsComponent {
             if component.alarm.finished() {
                 info!("led alarm is finished. new alarm set.");
                 component.alarm.schedule(countdown).unwrap();
-            } else {
-                info!("led alarm is not finished. no alarm changed.");
-                component.alarm.clear_interrupt();
             }
         })
     }
@@ -235,6 +242,13 @@ fn TIMER_IRQ_1() {
             component.do_pins_command(scheduled_pins_command.pins_command);
         } else {
             info!("TIMER_IRQ_1 no command found. why?");
+        }
+
+        if let Some(next) = component.queue.peek() {
+            info!("next queue is found. {}", next);
+            component.alarm.schedule_at(next.schedule).unwrap();
+        } else {
+            info!("next queue is none. clear interrupt");
             component.alarm.clear_interrupt();
         }
     })

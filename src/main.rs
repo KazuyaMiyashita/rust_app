@@ -139,22 +139,26 @@ fn main() -> ! {
         let pushed_buttons = ButtonInputQueue::pop_all();
         if pushed_buttons.contains(&ButtonInput::Button0) {
             counter[0] += 1;
-            writeln!(console, "0: {}", counter[0]).unwrap();
+            writeln!(console, "Push! B0").unwrap();
+            writeln!(console, "cnt:{}", counter[0]).unwrap();
             LedPinsComponent::set(0, Command::HIGH);
             LedPinsComponent::set_later(0, Command::LOW, 500.millis());
         } else if pushed_buttons.contains(&ButtonInput::Button1) {
             counter[1] += 1;
-            writeln!(console, "1: {}", counter[1]).unwrap();
+            writeln!(console, "Push! B1").unwrap();
+            writeln!(console, "cnt:{}", counter[1]).unwrap();
             LedPinsComponent::set(1, Command::HIGH);
             LedPinsComponent::set_later(1, Command::LOW, 500.millis());
         } else if pushed_buttons.contains(&ButtonInput::Button2) {
             counter[2] += 1;
-            writeln!(console, "2: {}", counter[2]).unwrap();
+            writeln!(console, "Push! B2").unwrap();
+            writeln!(console, "cnt:{}", counter[2]).unwrap();
             LedPinsComponent::set(2, Command::HIGH);
             LedPinsComponent::set_later(2, Command::LOW, 500.millis());
         } else if pushed_buttons.contains(&ButtonInput::Button3) {
             counter[3] += 1;
-            writeln!(console, "3: {}", counter[3]).unwrap();
+            writeln!(console, "Push! B3").unwrap();
+            writeln!(console, "cnt:{}", counter[3]).unwrap();
             LedPinsComponent::set(3, Command::HIGH);
             LedPinsComponent::set_later(3, Command::LOW, 500.millis());
         }
