@@ -22,7 +22,7 @@ use embedded_hal::digital::v2::OutputPin;
 
 use bsp::hal::fugit::RateExtU32;
 use bsp::hal::{clocks::init_clocks_and_plls, gpio, pac, sio::Sio, watchdog::Watchdog, Timer, I2C};
-use bsp::hal::fugit::ExtU32;
+// use bsp::hal::fugit::ExtU32;
 
 
 use crate::console::Console;
@@ -35,7 +35,7 @@ extern crate alloc;
 
 use crate::button_input_queue::ButtonInput;
 use button_input_queue::ButtonInputQueue;
-use crate::scheduler::Scheduler;
+// use crate::scheduler::Scheduler;
 
 // Pin types quickly become very long!
 // We'll create some type aliases using `type` to help with that
@@ -79,7 +79,7 @@ fn main() -> ! {
 
     let mut timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
 
-    Scheduler::init(timer, timer.alarm_1().unwrap());
+    // Scheduler::init(timer, timer.alarm_1().unwrap());
 
     let pins = bsp::Pins::new(
         pac.IO_BANK0,
@@ -137,9 +137,9 @@ fn main() -> ! {
         if pushed_buttons.contains(&ButtonInput::Button0) {
             counter[0] += 1;
             led_0.set_high().unwrap();
-            Scheduler::set(500.millis(), || {
-                led_0.set_low().unwrap();
-            });
+            // Scheduler::set(500.millis(), || {
+            //     led_0.set_low().unwrap();
+            // });
         } else if pushed_buttons.contains(&ButtonInput::Button1) {
             counter[1] += 1;
         }  else if pushed_buttons.contains(&ButtonInput::Button2) {

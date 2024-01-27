@@ -409,7 +409,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rp2040-project-template"
+name = "rust_app"
 version = "0.1.0"
 dependencies = [
  "alloc-cortex-m",
