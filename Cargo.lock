@@ -160,6 +160,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "fixed_size_queue"
+version = "0.1.0"
+
+[[package]]
 name = "frunk"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -419,6 +423,7 @@ dependencies = [
  "defmt",
  "defmt-rtt",
  "embedded-hal",
+ "fixed_size_queue",
  "fugit",
  "panic-probe",
  "rp-pico",

@@ -1,4 +1,4 @@
-use defmt::{debug, error, info, write};
+use defmt::{error, info, write};
 
 use bsp::hal::{gpio, pac, pac::interrupt};
 use core::cell::RefCell;
@@ -10,6 +10,7 @@ use rp_pico::hal::timer::{Alarm, Alarm1, Instant};
 use rp_pico::hal::Timer;
 
 use core::marker::Copy;
+use fixed_size_queue::FixedSizeQueue;
 
 type Led0Pin = gpio::Pin<gpio::bank0::Gpio13, gpio::FunctionSioOutput, gpio::PullDown>;
 type Led1Pin = gpio::Pin<gpio::bank0::Gpio12, gpio::FunctionSioOutput, gpio::PullDown>;
@@ -17,88 +18,6 @@ type Led2Pin = gpio::Pin<gpio::bank0::Gpio11, gpio::FunctionSioOutput, gpio::Pul
 type Led3Pin = gpio::Pin<gpio::bank0::Gpio10, gpio::FunctionSioOutput, gpio::PullDown>;
 
 type LedPin = gpio::Pin<gpio::DynPinId, gpio::FunctionSioOutput, gpio::PullDown>;
-
-struct FixedSizeQueue<T, const N: usize> {
-    heap: [Option<T>; N],
-    size: usize,
-}
-
-impl<T, const N: usize> FixedSizeQueue<T, N>
-where
-    T: Copy + Ord + Sized + defmt::Format,
-{
-    pub fn new() -> Self {
-        FixedSizeQueue {
-            heap: [None; N],
-            size: 0,
-        }
-    }
-
-    pub fn peek(&self) -> Option<&T> {
-        self.heap.get(0).and_then(|opt| opt.as_ref())
-    }
-
-    pub fn pop(&mut self) -> Option<T> {
-        if self.size > 0 {
-            let root = self.heap[0].take();
-            self.size -= 1;
-            self.heapify_down(0);
-            root
-        } else {
-            None
-        }
-    }
-
-    pub fn push(&mut self, item: T) {
-        debug!(
-            "FixedSizeQueue::push. item: {}, current heap: {}",
-            item, self.heap
-        );
-        if self.size < N {
-            self.heap[self.size] = Some(item);
-            self.size += 1;
-            self.heapify_up(self.size - 1);
-        } else if let Some(root) = self.heap.get_mut(0) {
-            if let Some(top) = root.as_mut() {
-                if *top < item {
-                    *top = item;
-                    self.heapify_down(0);
-                }
-            }
-        }
-    }
-
-    fn heapify_up(&mut self, mut index: usize) {
-        while index > 0 {
-            let parent = (index - 1) / 2;
-            if self.heap[index] > self.heap[parent] {
-                self.heap.swap(index, parent);
-                index = parent;
-            } else {
-                break;
-            }
-        }
-    }
-
-    fn heapify_down(&mut self, mut index: usize) {
-        while 2 * index + 1 < self.size {
-            let left_child = 2 * index + 1;
-            let right_child = 2 * index + 2;
-            let mut largest_child = left_child;
-
-            if right_child < self.size && self.heap[right_child] > self.heap[left_child] {
-                largest_child = right_child;
-            }
-
-            if self.heap[index] < self.heap[largest_child] {
-                self.heap.swap(index, largest_child);
-                index = largest_child;
-            } else {
-                break;
-            }
-        }
-    }
-}
 
 #[derive(Clone, Copy, PartialEq, Eq, Ord)]
 struct ScheduledPinsCommand {
