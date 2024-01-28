@@ -272,11 +272,11 @@ mod tests {
             MockAlarm {}
         }
     }
-    impl Alarm<u32> for MockAlarm {
+    impl Alarm<u32, u32> for MockAlarm {
         fn finished(&self) -> bool {
             true
         }
-        fn schedule<D: Duration>(&mut self, countdown: D) {}
+        fn schedule(&mut self, countdown: u32) {}
         fn schedule_at(&mut self, at: u32) {}
         fn clear_interrupt(&mut self) {}
     }
@@ -309,6 +309,14 @@ mod tests {
         led_pins.timer().tick = 250;
         led_pins.handle_schedule();
         assert_eq!(led_pins.led0().get_status(), LedStatus::HIGH);
+
+        led_pins.timer().tick = 499;
+        led_pins.handle_schedule();
+        assert_eq!(led_pins.led0().get_status(), LedStatus::HIGH);
+
+        led_pins.timer().tick = 500;
+        led_pins.handle_schedule();
+        assert_eq!(led_pins.led0().get_status(), LedStatus::LOW);
 
         todo!("some test yet implemented")
     }
