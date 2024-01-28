@@ -10,7 +10,7 @@ use rp_pico::hal::timer::{Alarm, Alarm1, Instant};
 use rp_pico::hal::Timer;
 
 use core::marker::Copy;
-use fixed_size_queue::FixedSizeQueue;
+use fixed_size_priority_queue::FixedSizePriorityQueue;
 
 type Led0Pin = gpio::Pin<gpio::bank0::Gpio13, gpio::FunctionSioOutput, gpio::PullDown>;
 type Led1Pin = gpio::Pin<gpio::bank0::Gpio12, gpio::FunctionSioOutput, gpio::PullDown>;
@@ -27,7 +27,7 @@ struct ScheduledPinsCommand {
 
 impl PartialOrd for ScheduledPinsCommand {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        other.schedule.partial_cmp(&self.schedule)
+        self.schedule.partial_cmp(&other.schedule)
     }
 }
 
@@ -58,7 +58,7 @@ pub struct LedPinsComponent {
     leds: [LedPin; 4],
     timer: Timer,
     alarm: Alarm1,
-    queue: FixedSizeQueue<ScheduledPinsCommand, 5>,
+    queue: FixedSizePriorityQueue<ScheduledPinsCommand, 5>,
 }
 
 static GLOBAL_LED_PINS_COMPONENT: Mutex<RefCell<Option<LedPinsComponent>>> =
@@ -87,7 +87,7 @@ impl LedPinsComponent {
                     ],
                     timer,
                     alarm,
-                    queue: FixedSizeQueue::new(),
+                    queue: FixedSizePriorityQueue::new(),
                 }))
         });
 
@@ -142,6 +142,8 @@ impl LedPinsComponent {
     }
 
     fn do_pins_command(&mut self, pins_command: PinsCommand) {
+        info!("Do {}", pins_command);
+
         match pins_command.command {
             Command::HIGH => self.leds[pins_command.led_num].set_high().unwrap(),
             Command::LOW => self.leds[pins_command.led_num].set_low().unwrap(),
@@ -156,19 +158,22 @@ fn TIMER_IRQ_1() {
         let mut binding = GLOBAL_LED_PINS_COMPONENT.borrow(cs).borrow_mut();
         let component = binding.as_mut().unwrap();
 
-        if let Some(scheduled_pins_command) = component.queue.pop() {
-            info!("TIMER_IRQ_1 poped command: {}", scheduled_pins_command);
-            component.do_pins_command(scheduled_pins_command.pins_command);
-        } else {
-            info!("TIMER_IRQ_1 no command found. why?");
+        let now = component.timer.get_counter();
+
+        // キューに溜まったもののうち現在より前のものは全て実行
+        while let Some(&next) = component.queue.peek() {
+            if next.schedule < now {
+                let _ = component.queue.pop();
+                component.do_pins_command(next.pins_command);
+            } else {
+                break;
+            }
         }
 
+        // キューに残りがあれば、タイマーセット
         if let Some(next) = component.queue.peek() {
-            info!("next queue is found. {}", next);
             component.alarm.schedule_at(next.schedule).unwrap();
-        } else {
-            info!("next queue is none. clear interrupt");
-            component.alarm.clear_interrupt();
         }
+        component.alarm.clear_interrupt();
     })
 }
