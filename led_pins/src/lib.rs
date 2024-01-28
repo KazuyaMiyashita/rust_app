@@ -143,11 +143,14 @@ where
                 self.leds[led_num].set_status(LedStatus::LOW);
                 None
             }
-            LedMode::BLINK => Some(ScheduledPinsCommand {
-                schedule: self.scheduler.get_counter().add_millis(250),
-                led_num,
-                command: Command::ChangeLedStatus(LedStatus::HIGH),
-            }),
+            LedMode::BLINK => {
+                self.leds[led_num].set_status(LedStatus::HIGH);
+                Some(ScheduledPinsCommand {
+                    schedule: self.scheduler.get_counter().add_millis(250),
+                    led_num,
+                    command: Command::ChangeLedStatus(LedStatus::LOW),
+                })
+            }
         }
     }
 
@@ -186,6 +189,7 @@ where
     }
 
     pub fn handle_schedule(&mut self) {
+        self.scheduler.clear_interrupt();
         let now = self.scheduler.get_counter();
 
         // キューに溜まったもののうち現在より前のものは全て実行
@@ -204,7 +208,6 @@ where
         if let Some(next) = self.queue.peek() {
             self.scheduler.schedule_at(next.schedule);
         }
-        self.scheduler.clear_interrupt();
     }
 
     #[cfg(test)]
