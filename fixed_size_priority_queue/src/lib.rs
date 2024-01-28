@@ -4,7 +4,7 @@ use core::marker::Copy;
 
 #[derive(Debug, PartialEq)]
 pub struct FixedSizePriorityQueue<T, const N: usize> {
-    array: [Option<T>; N],
+    pub array: [Option<T>; N], // led_pins のテストのため。。
     size: usize,
 }
 

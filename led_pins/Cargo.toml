@@ -1,0 +1,8 @@
+[package]
+edition = "2021"
+name = "led_pins"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+fixed_size_priority_queue = { path = "../fixed_size_priority_queue" }

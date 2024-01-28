@@ -1,0 +1,101 @@
+delayed span bug: 
+   0: std::backtrace::Backtrace::create
+   1: std::backtrace::Backtrace::capture
+   2: <rustc_errors::DiagCtxtInner>::emit_diagnostic_without_consuming
+   3: <rustc_errors::DiagCtxt>::emit_diagnostic_without_consuming
+   4: <rustc_span::ErrorGuaranteed as rustc_errors::diagnostic_builder::EmissionGuarantee>::emit_producing_guarantee
+   5: rustc_query_system::query::plumbing::mk_cycle::<rustc_query_impl::DynamicConfig<rustc_query_system::query::caches::SingleCache<rustc_middle::query::erase::Erased<[u8; 24]>>, false, false, false>, rustc_query_impl::plumbing::QueryCtxt>
+   6: rustc_query_system::query::plumbing::cycle_error::<rustc_query_impl::DynamicConfig<rustc_query_system::query::caches::SingleCache<rustc_middle::query::erase::Erased<[u8; 24]>>, false, false, false>, rustc_query_impl::plumbing::QueryCtxt>
+   7: rustc_query_system::query::plumbing::try_execute_query::<rustc_query_impl::DynamicConfig<rustc_query_system::query::caches::DefaultCache<rustc_span::def_id::DefId, rustc_middle::query::erase::Erased<[u8; 24]>>, false, false, false>, rustc_query_impl::plumbing::QueryCtxt, false>
+   8: rustc_query_impl::query_impl::fn_sig::get_query_non_incr::__rust_end_short_backtrace
+   9: rustc_middle::query::plumbing::query_get_at::<rustc_query_system::query::caches::DefaultCache<rustc_span::def_id::DefId, rustc_middle::query::erase::Erased<[u8; 24]>>>
+  10: rustc_trait_selection::traits::object_safety::virtual_call_violations_for_method
+  11: rustc_trait_selection::traits::object_safety::object_safety_violations_for_assoc_item
+  12: <core::iter::adapters::flatten::FlatMap<core::iter::adapters::map::Map<core::iter::adapters::map::Map<core::slice::iter::Iter<(rustc_span::symbol::Symbol, rustc_middle::ty::assoc::AssocItem)>, <rustc_data_structures::sorted_map::index_map::SortedIndexMultiMap<u32, rustc_span::symbol::Symbol, rustc_middle::ty::assoc::AssocItem>>::iter::{closure#0}>, <rustc_middle::ty::assoc::AssocItems>::in_definition_order::{closure#0}>, alloc::vec::Vec<rustc_middle::traits::ObjectSafetyViolation>, rustc_trait_selection::traits::object_safety::object_safety_violations_for_trait::{closure#0}> as core::iter::traits::iterator::Iterator>::next
+  13: <alloc::vec::Vec<rustc_middle::traits::ObjectSafetyViolation> as alloc::vec::spec_from_iter::SpecFromIter<rustc_middle::traits::ObjectSafetyViolation, core::iter::adapters::flatten::FlatMap<core::iter::adapters::map::Map<core::iter::adapters::map::Map<core::slice::iter::Iter<(rustc_span::symbol::Symbol, rustc_middle::ty::assoc::AssocItem)>, <rustc_data_structures::sorted_map::index_map::SortedIndexMultiMap<u32, rustc_span::symbol::Symbol, rustc_middle::ty::assoc::AssocItem>>::iter::{closure#0}>, <rustc_middle::ty::assoc::AssocItems>::in_definition_order::{closure#0}>, alloc::vec::Vec<rustc_middle::traits::ObjectSafetyViolation>, rustc_trait_selection::traits::object_safety::object_safety_violations_for_trait::{closure#0}>>>::from_iter
+  14: <&mut rustc_trait_selection::traits::object_safety::object_safety_violations::{closure#0} as core::ops::function::FnOnce<(rustc_span::def_id::DefId,)>>::call_once
+  15: <core::iter::adapters::flatten::FlatMap<rustc_trait_selection::traits::util::SupertraitDefIds, alloc::vec::Vec<rustc_middle::traits::ObjectSafetyViolation>, rustc_trait_selection::traits::object_safety::object_safety_violations::{closure#0}> as core::iter::traits::iterator::Iterator>::next
+  16: <smallvec::SmallVec<[rustc_middle::traits::ObjectSafetyViolation; 8]> as core::iter::traits::collect::Extend<rustc_middle::traits::ObjectSafetyViolation>>::extend::<core::iter::adapters::flatten::FlatMap<rustc_trait_selection::traits::util::SupertraitDefIds, alloc::vec::Vec<rustc_middle::traits::ObjectSafetyViolation>, rustc_trait_selection::traits::object_safety::object_safety_violations::{closure#0}>>
+  17: rustc_trait_selection::traits::object_safety::object_safety_violations
+  18: rustc_query_impl::plumbing::__rust_begin_short_backtrace::<rustc_query_impl::query_impl::object_safety_violations::dynamic_query::{closure#2}::{closure#0}, rustc_middle::query::erase::Erased<[u8; 16]>>
+  19: <rustc_query_impl::query_impl::object_safety_violations::dynamic_query::{closure#2} as core::ops::function::FnOnce<(rustc_middle::ty::context::TyCtxt, rustc_span::def_id::DefId)>>::call_once
+  20: rustc_query_system::query::plumbing::try_execute_query::<rustc_query_impl::DynamicConfig<rustc_query_system::query::caches::DefaultCache<rustc_span::def_id::DefId, rustc_middle::query::erase::Erased<[u8; 16]>>, false, false, false>, rustc_query_impl::plumbing::QueryCtxt, false>
+  21: rustc_query_impl::query_impl::object_safety_violations::get_query_non_incr::__rust_end_short_backtrace
+  22: rustc_middle::query::plumbing::query_get_at::<rustc_query_system::query::caches::DefaultCache<rustc_span::def_id::DefId, rustc_middle::query::erase::Erased<[u8; 16]>>>
+  23: rustc_trait_selection::traits::object_safety::check_is_object_safe
+  24: rustc_query_impl::plumbing::__rust_begin_short_backtrace::<rustc_query_impl::query_impl::check_is_object_safe::dynamic_query::{closure#2}::{closure#0}, rustc_middle::query::erase::Erased<[u8; 1]>>
+  25: <rustc_query_impl::query_impl::check_is_object_safe::dynamic_query::{closure#2} as core::ops::function::FnOnce<(rustc_middle::ty::context::TyCtxt, rustc_span::def_id::DefId)>>::call_once
+  26: rustc_query_system::query::plumbing::try_execute_query::<rustc_query_impl::DynamicConfig<rustc_query_system::query::caches::DefaultCache<rustc_span::def_id::DefId, rustc_middle::query::erase::Erased<[u8; 1]>>, false, false, false>, rustc_query_impl::plumbing::QueryCtxt, false>
+  27: rustc_query_impl::query_impl::check_is_object_safe::get_query_non_incr::__rust_end_short_backtrace
+  28: rustc_middle::query::plumbing::query_get_at::<rustc_query_system::query::caches::DefaultCache<rustc_span::def_id::DefId, rustc_middle::query::erase::Erased<[u8; 1]>>>
+  29: <dyn rustc_hir_analysis::astconv::AstConv>::maybe_lint_impl_trait
+  30: <dyn rustc_hir_analysis::astconv::AstConv>::ast_ty_to_ty_inner
+  31: <dyn rustc_hir_analysis::astconv::AstConv>::ty_of_fn
+  32: rustc_hir_analysis::collect::fn_sig
+  33: rustc_query_impl::plumbing::__rust_begin_short_backtrace::<rustc_query_impl::query_impl::fn_sig::dynamic_query::{closure#2}::{closure#0}, rustc_middle::query::erase::Erased<[u8; 24]>>
+  34: <rustc_query_impl::query_impl::fn_sig::dynamic_query::{closure#2} as core::ops::function::FnOnce<(rustc_middle::ty::context::TyCtxt, rustc_span::def_id::DefId)>>::call_once
+  35: rustc_query_system::query::plumbing::try_execute_query::<rustc_query_impl::DynamicConfig<rustc_query_system::query::caches::DefaultCache<rustc_span::def_id::DefId, rustc_middle::query::erase::Erased<[u8; 24]>>, false, false, false>, rustc_query_impl::plumbing::QueryCtxt, false>
+  36: rustc_query_impl::query_impl::fn_sig::get_query_non_incr::__rust_end_short_backtrace
+  37: <rustc_hir_analysis::collect::CollectItemTypesVisitor as rustc_hir::intravisit::Visitor>::visit_trait_item
+  38: <rustc_middle::hir::map::Map>::visit_item_likes_in_module::<rustc_hir_analysis::collect::CollectItemTypesVisitor>
+  39: rustc_hir_analysis::collect::collect_mod_item_types
+  40: rustc_query_impl::plumbing::__rust_begin_short_backtrace::<rustc_query_impl::query_impl::collect_mod_item_types::dynamic_query::{closure#2}::{closure#0}, rustc_middle::query::erase::Erased<[u8; 0]>>
+  41: <rustc_query_impl::query_impl::collect_mod_item_types::dynamic_query::{closure#2} as core::ops::function::FnOnce<(rustc_middle::ty::context::TyCtxt, rustc_span::def_id::LocalModDefId)>>::call_once
+  42: rustc_query_system::query::plumbing::try_execute_query::<rustc_query_impl::DynamicConfig<rustc_query_system::query::caches::DefaultCache<rustc_span::def_id::LocalModDefId, rustc_middle::query::erase::Erased<[u8; 0]>>, false, false, false>, rustc_query_impl::plumbing::QueryCtxt, false>
+  43: rustc_query_impl::query_impl::collect_mod_item_types::get_query_non_incr::__rust_end_short_backtrace
+  44: <rustc_session::session::Session>::track_errors::<rustc_hir_analysis::check_crate::{closure#0}, ()>
+  45: rustc_hir_analysis::check_crate
+  46: rustc_interface::passes::analysis
+  47: rustc_query_impl::plumbing::__rust_begin_short_backtrace::<rustc_query_impl::query_impl::analysis::dynamic_query::{closure#2}::{closure#0}, rustc_middle::query::erase::Erased<[u8; 1]>>
+  48: <rustc_query_impl::query_impl::analysis::dynamic_query::{closure#2} as core::ops::function::FnOnce<(rustc_middle::ty::context::TyCtxt, ())>>::call_once
+  49: rustc_query_system::query::plumbing::try_execute_query::<rustc_query_impl::DynamicConfig<rustc_query_system::query::caches::SingleCache<rustc_middle::query::erase::Erased<[u8; 1]>>, false, false, false>, rustc_query_impl::plumbing::QueryCtxt, false>
+  50: rustc_query_impl::query_impl::analysis::get_query_non_incr::__rust_end_short_backtrace
+  51: <rustc_middle::ty::context::GlobalCtxt>::enter::<rustc_driver_impl::run_compiler::{closure#0}::{closure#0}::{closure#3}, core::result::Result<(), rustc_span::ErrorGuaranteed>>
+  52: <rustc_interface::interface::Compiler>::enter::<rustc_driver_impl::run_compiler::{closure#0}::{closure#0}, core::result::Result<core::option::Option<rustc_interface::queries::Linker>, rustc_span::ErrorGuaranteed>>
+  53: rustc_span::set_source_map::<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}::{closure#0}>
+  54: <scoped_tls::ScopedKey<rustc_span::SessionGlobals>>::set::<rustc_interface::util::run_in_thread_pool_with_globals<rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>
+  55: std::sys_common::backtrace::__rust_begin_short_backtrace::<rustc_interface::util::run_in_thread_with_globals<rustc_interface::util::run_in_thread_pool_with_globals<rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>
+  56: <<std::thread::Builder>::spawn_unchecked_<rustc_interface::util::run_in_thread_with_globals<rustc_interface::util::run_in_thread_pool_with_globals<rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#1} as core::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+  57: std::sys::unix::thread::Thread::new::thread_start
+  58: __pthread_start
+
+delayed span bug: `self.err_count()` changed but an error was not emitted
+   0: std::backtrace::Backtrace::create
+   1: std::backtrace::Backtrace::capture
+   2: <rustc_errors::DiagCtxtInner>::emit_diagnostic_without_consuming
+   3: <rustc_errors::DiagCtxt>::emit_diagnostic_without_consuming
+   4: <rustc_errors::DiagCtxt>::span_delayed_bug::<rustc_span::span_encoding::Span, &str>
+   5: <rustc_session::session::Session>::track_errors::<rustc_hir_analysis::check_crate::{closure#0}, ()>
+   6: rustc_hir_analysis::check_crate
+   7: rustc_interface::passes::analysis
+   8: rustc_query_impl::plumbing::__rust_begin_short_backtrace::<rustc_query_impl::query_impl::analysis::dynamic_query::{closure#2}::{closure#0}, rustc_middle::query::erase::Erased<[u8; 1]>>
+   9: <rustc_query_impl::query_impl::analysis::dynamic_query::{closure#2} as core::ops::function::FnOnce<(rustc_middle::ty::context::TyCtxt, ())>>::call_once
+  10: rustc_query_system::query::plumbing::try_execute_query::<rustc_query_impl::DynamicConfig<rustc_query_system::query::caches::SingleCache<rustc_middle::query::erase::Erased<[u8; 1]>>, false, false, false>, rustc_query_impl::plumbing::QueryCtxt, false>
+  11: rustc_query_impl::query_impl::analysis::get_query_non_incr::__rust_end_short_backtrace
+  12: <rustc_middle::ty::context::GlobalCtxt>::enter::<rustc_driver_impl::run_compiler::{closure#0}::{closure#0}::{closure#3}, core::result::Result<(), rustc_span::ErrorGuaranteed>>
+  13: <rustc_interface::interface::Compiler>::enter::<rustc_driver_impl::run_compiler::{closure#0}::{closure#0}, core::result::Result<core::option::Option<rustc_interface::queries::Linker>, rustc_span::ErrorGuaranteed>>
+  14: rustc_span::set_source_map::<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}::{closure#0}>
+  15: <scoped_tls::ScopedKey<rustc_span::SessionGlobals>>::set::<rustc_interface::util::run_in_thread_pool_with_globals<rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>
+  16: std::sys_common::backtrace::__rust_begin_short_backtrace::<rustc_interface::util::run_in_thread_with_globals<rustc_interface::util::run_in_thread_pool_with_globals<rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>
+  17: <<std::thread::Builder>::spawn_unchecked_<rustc_interface::util::run_in_thread_with_globals<rustc_interface::util::run_in_thread_pool_with_globals<rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#1} as core::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+  18: std::sys::unix::thread::Thread::new::thread_start
+  19: __pthread_start
+
+delayed span bug: trait objects must include the `dyn` keyword
+   0: std::backtrace::Backtrace::create
+   1: std::backtrace::Backtrace::capture
+   2: <rustc_errors::DiagCtxtInner>::emit_diagnostic_without_consuming
+   3: <rustc_errors::DiagCtxtInner>::emit_stashed_diagnostics
+   4: <rustc_errors::DiagCtxt>::print_error_count
+   5: <rustc_session::session::Session>::finish_diagnostics
+   6: rustc_span::set_source_map::<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}::{closure#0}>
+   7: <scoped_tls::ScopedKey<rustc_span::SessionGlobals>>::set::<rustc_interface::util::run_in_thread_pool_with_globals<rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>
+   8: std::sys_common::backtrace::__rust_begin_short_backtrace::<rustc_interface::util::run_in_thread_with_globals<rustc_interface::util::run_in_thread_pool_with_globals<rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>
+   9: <<std::thread::Builder>::spawn_unchecked_<rustc_interface::util::run_in_thread_with_globals<rustc_interface::util::run_in_thread_pool_with_globals<rustc_interface::interface::run_compiler<core::result::Result<(), rustc_span::ErrorGuaranteed>, rustc_driver_impl::run_compiler::{closure#0}>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#0}::{closure#0}, core::result::Result<(), rustc_span::ErrorGuaranteed>>::{closure#1} as core::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+  10: std::sys::unix::thread::Thread::new::thread_start
+  11: __pthread_start
+
+
+
+rustc version: 1.77.0-nightly (595bc6f00 2024-01-05)
+platform: x86_64-apple-darwin
