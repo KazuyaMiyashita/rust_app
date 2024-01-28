@@ -139,33 +139,45 @@ fn main() -> ! {
     }
     console.clear().unwrap();
 
-    let mut counter = [0, 0, 0, 0];
+    let mut status = [false; 4];
     loop {
         let pushed_buttons = ButtonInputQueue::pop_all();
         if pushed_buttons.contains(&ButtonInput::Button0) {
-            counter[0] += 1;
-            writeln!(console, "Push! B0").unwrap();
-            writeln!(console, "cnt:{}", counter[0]).unwrap();
-            GlobalLedPins::set_led_mode(0, LedMode::BLINK);
-            GlobalLedPins::set_mode_later(0, LedMode::LOW, 2000.millis());
+            if status[0] {
+                writeln!(console, "Stop B0").unwrap();
+                GlobalLedPins::set_led_mode(0, LedMode::LOW);
+            } else {
+                writeln!(console, "Start B0").unwrap();
+                GlobalLedPins::set_led_mode(0, LedMode::BLINK);
+            }
+            status[0] = !status[0];
         } else if pushed_buttons.contains(&ButtonInput::Button1) {
-            counter[1] += 1;
-            writeln!(console, "Push! B1").unwrap();
-            writeln!(console, "cnt:{}", counter[1]).unwrap();
-            GlobalLedPins::set_led_mode(1, LedMode::BLINK);
-            GlobalLedPins::set_mode_later(1, LedMode::LOW, 2000.millis());
+            if status[1] {
+                writeln!(console, "Stop B1").unwrap();
+                GlobalLedPins::set_led_mode(1, LedMode::LOW);
+            } else {
+                writeln!(console, "Start B1").unwrap();
+                GlobalLedPins::set_led_mode(1, LedMode::BLINK);
+            }
+            status[1] = !status[1];
         } else if pushed_buttons.contains(&ButtonInput::Button2) {
-            counter[2] += 1;
-            writeln!(console, "Push! B2").unwrap();
-            writeln!(console, "cnt:{}", counter[2]).unwrap();
-            GlobalLedPins::set_led_mode(2, LedMode::BLINK);
-            GlobalLedPins::set_mode_later(2, LedMode::LOW, 5200000.millis());
+            if status[2] {
+                writeln!(console, "Stop B2").unwrap();
+                GlobalLedPins::set_led_mode(2, LedMode::LOW);
+            } else {
+                writeln!(console, "Start B2").unwrap();
+                GlobalLedPins::set_led_mode(2, LedMode::BLINK);
+            }
+            status[2] = !status[2];
         } else if pushed_buttons.contains(&ButtonInput::Button3) {
-            counter[3] += 1;
-            writeln!(console, "Push! B3").unwrap();
-            writeln!(console, "cnt:{}", counter[3]).unwrap();
-            GlobalLedPins::set_led_mode(3, LedMode::BLINK);
-            GlobalLedPins::set_mode_later(3, LedMode::LOW, 2000.millis());
+            if status[3] {
+                writeln!(console, "Stop B3").unwrap();
+                GlobalLedPins::set_led_mode(3, LedMode::LOW);
+            } else {
+                writeln!(console, "Start B3").unwrap();
+                GlobalLedPins::set_led_mode(3, LedMode::BLINK);
+            }
+            status[3] = !status[3];
         }
 
         // info!("{:02}{:02}{:02}{:02}", counter[0], counter[1], counter[2], counter[3]);

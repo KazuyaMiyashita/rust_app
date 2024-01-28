@@ -15,7 +15,7 @@ type Led3Pin = gpio::Pin<gpio::bank0::Gpio10, gpio::FunctionSioOutput, gpio::Pul
 
 type LedPin = gpio::Pin<gpio::DynPinId, gpio::FunctionSioOutput, gpio::PullDown>;
 
-use led_pins::{Alarm, Duration, Instant, Led, LedMode, LedPins, LedStatus, Timer};
+use led_pins::{Duration, Instant, Led, LedMode, LedPins, LedStatus, Scheduler};
 
 #[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
 struct PicoInstant(rp_pico::hal::timer::Instant);
@@ -50,31 +50,31 @@ impl Led for PicoLed {
     }
 }
 
-struct PicoTimer(rp_pico::hal::Timer);
-impl Timer<PicoInstant> for PicoTimer {
-    fn get_counter(&self) -> PicoInstant {
-        PicoInstant(self.0.get_counter())
-    }
-}
-
 use rp_pico::hal::timer::Alarm as _;
-struct PicoAlarm(rp_pico::hal::timer::Alarm1);
-impl Alarm<PicoInstant, PicoDuration> for PicoAlarm {
+struct PicoScheduler {
+    timer: rp_pico::hal::Timer,
+    alarm: rp_pico::hal::timer::Alarm1,
+}
+impl Scheduler<PicoInstant, PicoDuration> for PicoScheduler {
+    fn get_counter(&self) -> PicoInstant {
+        PicoInstant(self.timer.get_counter())
+    }
+
     fn finished(&self) -> bool {
-        self.0.finished()
+        self.alarm.finished()
     }
     fn schedule(&mut self, countdown: PicoDuration) {
-        self.0.schedule(countdown.0).unwrap();
+        self.alarm.schedule(countdown.0).unwrap();
     }
     fn schedule_at(&mut self, at: PicoInstant) {
-        self.0.schedule_at(at.0).unwrap();
+        self.alarm.schedule_at(at.0).unwrap();
     }
     fn clear_interrupt(&mut self) {
-        self.0.clear_interrupt()
+        self.alarm.clear_interrupt()
     }
 }
 
-type GlobalLedPins = LedPins<PicoInstant, PicoDuration, PicoLed, PicoTimer, PicoAlarm>;
+type GlobalLedPins = LedPins<PicoInstant, PicoDuration, PicoLed, PicoScheduler>;
 
 static GLOBAL_LED_PINS_COMPONENT: Mutex<RefCell<Option<GlobalLedPins>>> =
     Mutex::new(RefCell::new(None));
@@ -98,8 +98,7 @@ pub fn init(
                 PicoLed(led1.into_dyn_pin()),
                 PicoLed(led2.into_dyn_pin()),
                 PicoLed(led3.into_dyn_pin()),
-                PicoTimer(timer),
-                PicoAlarm(alarm),
+                PicoScheduler { timer, alarm },
             )))
     });
 

@@ -18,10 +18,11 @@ pub trait Led {
     fn set_status(&mut self, led_status: LedStatus);
 }
 
-pub trait Timer<I: Instant> {
+pub trait Scheduler<I: Instant, D: Duration> {
+    // for Timer
     fn get_counter(&self) -> I;
-}
-pub trait Alarm<I: Instant, D: Duration> {
+
+    // for Alarm
     fn finished(&self) -> bool;
     fn schedule(&mut self, countdown: D);
     fn schedule_at(&mut self, at: I);
@@ -72,30 +73,28 @@ pub enum LedStatus {
     LOW,
 }
 
-pub struct LedPins<I: Instant + Ord + Copy, D: Duration, L: Led, T: Timer<I>, A: Alarm<I, D>> {
+#[cfg_attr(test, derive(Debug))]
+pub struct LedPins<I: Instant + Ord + Copy, D: Duration, L: Led, S: Scheduler<I, D>> {
     leds: [L; 4],
     led_modes: [LedMode; 4],
     queue: FixedSizePriorityQueue<ScheduledPinsCommand<I>, 20>,
-    timer: T,
-    alarm: A,
+    scheduler: S,
     _phantom: PhantomData<D>,
 }
 
-impl<I, D, L, T, A> LedPins<I, D, L, T, A>
+impl<I, D, L, S> LedPins<I, D, L, S>
 where
     I: Instant + Ord + Copy,
     D: Duration,
     L: Led,
-    T: Timer<I>,
-    A: Alarm<I, D>,
+    S: Scheduler<I, D>,
 {
-    pub fn init(led0: L, led1: L, led2: L, led3: L, timer: T, alarm: A) -> Self {
+    pub fn init(led0: L, led1: L, led2: L, led3: L, scheduler: S) -> Self {
         LedPins {
             leds: [led0, led1, led2, led3],
             led_modes: [LedMode::LOW; 4],
             queue: FixedSizePriorityQueue::new(),
-            timer,
-            alarm,
+            scheduler,
             _phantom: PhantomData {},
         }
     }
@@ -106,7 +105,7 @@ where
         }
         if let Some(next) = self._change_mode(led_num, led_mode) {
             self.queue.push(next);
-            self.alarm.schedule_at(next.schedule)
+            self.scheduler.schedule_at(next.schedule)
         }
     }
 
@@ -116,12 +115,15 @@ where
         }
 
         self.queue.push(ScheduledPinsCommand {
-            schedule: self.timer.get_counter().add_millis(countdown.to_millis()),
+            schedule: self
+                .scheduler
+                .get_counter()
+                .add_millis(countdown.to_millis()),
             led_num,
             command: Command::ChangeLedMode(led_mode),
         });
-        if self.alarm.finished() {
-            self.alarm.schedule(countdown);
+        if self.scheduler.finished() {
+            self.scheduler.schedule(countdown);
         }
     }
 
@@ -142,7 +144,7 @@ where
                 None
             }
             LedMode::BLINK => Some(ScheduledPinsCommand {
-                schedule: self.timer.get_counter().add_millis(250),
+                schedule: self.scheduler.get_counter().add_millis(250),
                 led_num,
                 command: Command::ChangeLedStatus(LedStatus::HIGH),
             }),
@@ -166,14 +168,14 @@ where
                 if pin == LedStatus::HIGH {
                     self.leds[led_num].set_status(LedStatus::HIGH);
                     Some(ScheduledPinsCommand {
-                        schedule: self.timer.get_counter().add_millis(250),
+                        schedule: self.scheduler.get_counter().add_millis(250),
                         led_num,
                         command: Command::ChangeLedStatus(LedStatus::LOW),
                     })
                 } else {
                     self.leds[led_num].set_status(LedStatus::LOW);
                     Some(ScheduledPinsCommand {
-                        schedule: self.timer.get_counter().add_millis(250),
+                        schedule: self.scheduler.get_counter().add_millis(250),
                         led_num,
                         command: Command::ChangeLedStatus(LedStatus::HIGH),
                     })
@@ -184,7 +186,7 @@ where
     }
 
     pub fn handle_schedule(&mut self) {
-        let now = self.timer.get_counter();
+        let now = self.scheduler.get_counter();
 
         // キューに溜まったもののうち現在より前のものは全て実行
         while let Some(&next) = self.queue.peek() {
@@ -200,19 +202,24 @@ where
 
         // キューに残りがあれば、タイマーセット
         if let Some(next) = self.queue.peek() {
-            self.alarm.schedule_at(next.schedule);
+            self.scheduler.schedule_at(next.schedule);
         }
-        self.alarm.clear_interrupt();
+        self.scheduler.clear_interrupt();
     }
 
     #[cfg(test)]
-    fn led0(&mut self) -> &mut L {
-        &mut self.leds[0]
+    fn leds_status(&mut self) -> [LedStatus; 4] {
+        [
+            self.leds[0].get_status(),
+            self.leds[1].get_status(),
+            self.leds[2].get_status(),
+            self.leds[3].get_status(),
+        ]
     }
 
     #[cfg(test)]
-    fn timer(&mut self) -> &mut T {
-        &mut self.timer
+    fn scheduler(&mut self) -> &mut S {
+        &mut self.scheduler
     }
 }
 
@@ -234,6 +241,7 @@ mod tests {
         }
     }
 
+    #[derive(Clone, Copy, Debug)]
     struct MockLed {
         led_status: LedStatus,
     }
@@ -252,44 +260,165 @@ mod tests {
             self.led_status = led_status;
         }
     }
-    struct MockTimer {
+
+    #[derive(Debug)]
+    struct MockScheduler {
         tick: u32,
+        next_schedule: Option<u32>,
     }
-    impl MockTimer {
+    impl MockScheduler {
         fn new() -> Self {
-            MockTimer { tick: 0 }
+            MockScheduler {
+                tick: 0,
+                next_schedule: None,
+            }
         }
     }
-    impl Timer<u32> for MockTimer {
+    impl Scheduler<u32, u32> for MockScheduler {
         fn get_counter(&self) -> u32 {
             self.tick
         }
-    }
-
-    struct MockAlarm {}
-    impl MockAlarm {
-        fn new() -> Self {
-            MockAlarm {}
-        }
-    }
-    impl Alarm<u32, u32> for MockAlarm {
         fn finished(&self) -> bool {
-            true
+            self.next_schedule.is_none()
         }
-        fn schedule(&mut self, countdown: u32) {}
-        fn schedule_at(&mut self, at: u32) {}
-        fn clear_interrupt(&mut self) {}
+        fn schedule(&mut self, countdown: u32) {
+            self.next_schedule = Some(self.tick + countdown);
+        }
+        fn schedule_at(&mut self, at: u32) {
+            self.next_schedule = Some(at);
+        }
+        fn clear_interrupt(&mut self) {
+            self.next_schedule = None;
+        }
     }
 
     #[test]
+    fn test0() {
+        let mut led_pins: LedPins<u32, u32, MockLed, MockScheduler> = LedPins::init(
+            MockLed::new(),
+            MockLed::new(),
+            MockLed::new(),
+            MockLed::new(),
+            MockScheduler::new(),
+        );
+
+        led_pins.scheduler().tick = 1;
+        led_pins.set_led_mode(0, LedMode::HIGH);
+        led_pins.set_mode_later(0, LedMode::LOW, 100);
+
+        led_pins.scheduler().tick = 2;
+        led_pins.set_led_mode(1, LedMode::HIGH);
+        led_pins.set_mode_later(1, LedMode::LOW, 100);
+
+        led_pins.scheduler().tick = 3;
+        led_pins.set_led_mode(2, LedMode::HIGH);
+        led_pins.set_mode_later(2, LedMode::LOW, 100);
+
+        led_pins.scheduler().tick = 4;
+        led_pins.set_led_mode(3, LedMode::HIGH);
+        led_pins.set_mode_later(3, LedMode::LOW, 100);
+
+        assert_eq!(
+            led_pins.leds_status(),
+            [
+                LedStatus::HIGH,
+                LedStatus::HIGH,
+                LedStatus::HIGH,
+                LedStatus::HIGH
+            ]
+        );
+
+        led_pins.scheduler().tick = 101;
+        led_pins.handle_schedule();
+        assert_eq!(
+            led_pins.leds_status(),
+            [
+                LedStatus::LOW,
+                LedStatus::HIGH,
+                LedStatus::HIGH,
+                LedStatus::HIGH
+            ]
+        );
+
+        led_pins.scheduler().tick = 102;
+        led_pins.handle_schedule();
+        assert_eq!(
+            led_pins.leds_status(),
+            [
+                LedStatus::LOW,
+                LedStatus::LOW,
+                LedStatus::HIGH,
+                LedStatus::HIGH
+            ]
+        );
+
+        led_pins.scheduler().tick = 103;
+        led_pins.handle_schedule();
+        assert_eq!(
+            led_pins.leds_status(),
+            [
+                LedStatus::LOW,
+                LedStatus::LOW,
+                LedStatus::LOW,
+                LedStatus::HIGH
+            ]
+        );
+
+        led_pins.scheduler().tick = 104;
+        led_pins.handle_schedule();
+        assert_eq!(
+            led_pins.leds_status(),
+            [
+                LedStatus::LOW,
+                LedStatus::LOW,
+                LedStatus::LOW,
+                LedStatus::LOW
+            ]
+        );
+    }
+
+    // #[test]
+    // fn test00() {
+    //     let mut led_pins: LedPins<u32, u32, MockLed, MockScheduler> = LedPins::init(
+    //         MockLed::new(),
+    //         MockLed::new(),
+    //         MockLed::new(),
+    //         MockLed::new(),
+    //         MockScheduler::new(),
+    //     );
+
+    //     led_pins.scheduler().tick = 1;
+    //     led_pins.set_led_mode(0, LedMode::HIGH);
+    //     println!("{:#?}", led_pins);
+
+    //     led_pins.set_mode_later(0, LedMode::LOW, 100);
+    //     println!("{:#?}", led_pins);
+
+    //     led_pins.scheduler().tick = 2;
+    //     led_pins.set_led_mode(1, LedMode::HIGH);
+    //     led_pins.set_mode_later(1, LedMode::LOW, 100);
+
+    //     led_pins.scheduler().tick = 3;
+    //     led_pins.set_led_mode(2, LedMode::HIGH);
+    //     led_pins.set_mode_later(2, LedMode::LOW, 100);
+
+    //     led_pins.scheduler().tick = 4;
+    //     led_pins.set_led_mode(3, LedMode::HIGH);
+    //     led_pins.set_mode_later(3, LedMode::LOW, 100);
+
+    //     println!("{:#?}", led_pins);
+
+    //     panic!();
+    // }
+
+    #[test]
     fn test1() {
-        let mut led_pins: LedPins<u32, u32, MockLed, MockTimer, MockAlarm> = LedPins::init(
+        let mut led_pins: LedPins<u32, u32, MockLed, MockScheduler> = LedPins::init(
             MockLed::new(),
             MockLed::new(),
             MockLed::new(),
             MockLed::new(),
-            MockTimer::new(),
-            MockAlarm::new(),
+            MockScheduler::new(),
         );
 
         led_pins.set_led_mode(0, LedMode::BLINK);
@@ -304,20 +433,49 @@ mod tests {
         );
 
         led_pins.handle_schedule();
-        assert_eq!(led_pins.led0().get_status(), LedStatus::LOW);
+        assert_eq!(led_pins.leds[0].get_status(), LedStatus::LOW);
 
-        led_pins.timer().tick = 250;
+        led_pins.scheduler().tick = 250;
         led_pins.handle_schedule();
-        assert_eq!(led_pins.led0().get_status(), LedStatus::HIGH);
+        assert_eq!(led_pins.leds[0].get_status(), LedStatus::HIGH);
 
-        led_pins.timer().tick = 499;
+        led_pins.scheduler().tick = 499;
         led_pins.handle_schedule();
-        assert_eq!(led_pins.led0().get_status(), LedStatus::HIGH);
+        assert_eq!(led_pins.leds[0].get_status(), LedStatus::HIGH);
 
-        led_pins.timer().tick = 500;
+        led_pins.scheduler().tick = 500;
         led_pins.handle_schedule();
-        assert_eq!(led_pins.led0().get_status(), LedStatus::LOW);
+        assert_eq!(led_pins.leds[0].get_status(), LedStatus::LOW);
+        assert_eq!(
+            led_pins.queue.peek(),
+            Some(ScheduledPinsCommand {
+                schedule: 750,
+                led_num: 0,
+                command: Command::ChangeLedStatus(LedStatus::HIGH)
+            })
+            .as_ref()
+        );
 
-        todo!("some test yet implemented")
+        // BLINKモードからLOWモードに変える
+        led_pins.scheduler().tick = 501;
+        led_pins.set_led_mode(0, LedMode::LOW);
+        assert_eq!(led_pins.leds[0].get_status(), LedStatus::LOW);
+
+        // BLINKモードの時のHIGHのスケジュールは無視され、LOWのままになる
+        assert_eq!(
+            led_pins.queue.peek(),
+            Some(ScheduledPinsCommand {
+                schedule: 750,
+                led_num: 0,
+                command: Command::ChangeLedStatus(LedStatus::HIGH)
+            })
+            .as_ref()
+        );
+        led_pins.scheduler().tick = 750;
+        println!("{:#?}", led_pins);
+        led_pins.handle_schedule();
+        assert_eq!(led_pins.leds[0].get_status(), LedStatus::LOW);
+
+        // todo!("some test yet implemented")
     }
 }
