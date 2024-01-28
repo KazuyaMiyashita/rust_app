@@ -1,10 +1,10 @@
-use defmt::{error, info, write};
+use defmt::{error, write};
 
 use bsp::hal::fugit::ExtU32;
 use bsp::hal::{gpio, pac, pac::interrupt};
 use core::cell::RefCell;
 use critical_section::Mutex;
-use embedded_hal::digital::v2::{InputPin, OutputPin};
+use embedded_hal::digital::v2::OutputPin;
 use fugit::MicrosDurationU32;
 use rp_pico as bsp;
 use rp_pico::hal::timer::{Alarm, Alarm1, Instant};
@@ -23,7 +23,8 @@ type LedPin = gpio::Pin<gpio::DynPinId, gpio::FunctionSioOutput, gpio::PullDown>
 #[derive(Clone, Copy, PartialEq, Eq, Ord)]
 struct ScheduledPinsCommand {
     schedule: Instant,
-    pins_command: PinsCommand,
+    led_num: usize,
+    command: Command,
 }
 
 impl PartialOrd for ScheduledPinsCommand {
@@ -38,27 +39,34 @@ impl defmt::Format for ScheduledPinsCommand {
             fmt,
             "[{}, {}, {}]",
             self.schedule.ticks(),
-            self.pins_command.led_num,
-            self.pins_command.command
+            self.led_num,
+            self.command
         )
     }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, defmt::Format)]
-struct PinsCommand {
-    led_num: usize,
-    command: Command,
+enum Command {
+    ChangeMode(Mode),
+    ChangePin(Pin), // BLINKモードの時のみピンの変更がタイマーでくる
 }
+
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, defmt::Format)]
-pub enum Command {
+pub enum Mode {
     HIGH,
     LOW,
     BLINK,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, defmt::Format)]
+enum Pin {
+    HIGH,
+    LOW,
+}
+
 pub struct LedPinsComponent {
     leds: [LedPin; 4],
-    led_modes: [Command; 4],
+    led_modes: [Mode; 4],
     timer: Timer,
     alarm: Alarm1,
     queue: FixedSizePriorityQueue<ScheduledPinsCommand, 20>,
@@ -88,7 +96,7 @@ impl LedPinsComponent {
                         led2.into_dyn_pin(),
                         led3.into_dyn_pin(),
                     ],
-                    led_modes: [Command::BLINK; 4],
+                    led_modes: [Mode::LOW; 4],
                     timer,
                     alarm,
                     queue: FixedSizePriorityQueue::new(),
@@ -100,46 +108,36 @@ impl LedPinsComponent {
         }
     }
 
-    pub fn set(led_num: usize, command: Command) {
+    pub fn set_mode(led_num: usize, mode: Mode) {
         critical_section::with(|cs| {
-            info!(
-                "LedPinsComponent::set led_num: {}, command: {}",
-                led_num, command
-            );
+            if led_num > 4 {
+                error!("invalid led_num: {}", led_num);
+                return;
+            }
 
             let mut binding = GLOBAL_LED_PINS_COMPONENT.borrow(cs).borrow_mut();
             let component = binding.as_mut().unwrap();
 
-            if led_num > 4 {
-                error!("invalid led_num] {}", led_num);
-                panic!("invalid led_num] {}", led_num);
+            if let Some(next) = component._change_mode(led_num, mode) {
+                component.queue.push(next);
             }
-
-            component.do_pins_command(PinsCommand { led_num, command });
-            // if let Some(next) = component.do_pins_command(PinsCommand { led_num, command }) {
-            //     component.queue.push(next);
-            // }
         })
     }
 
-    pub fn set_later(led_num: usize, command: Command, countdown: MicrosDurationU32) {
+    pub fn set_mode_later(led_num: usize, mode: Mode, countdown: MicrosDurationU32) {
         critical_section::with(|cs| {
-            info!(
-                "LedPinsComponent::set_later led_num: {}, command: {}",
-                led_num, command
-            );
+            if led_num > 4 {
+                error!("invalid led_num: {}", led_num);
+                return;
+            }
 
             let mut binding = GLOBAL_LED_PINS_COMPONENT.borrow(cs).borrow_mut();
             let component = binding.as_mut().unwrap();
 
-            if led_num > 4 {
-                error!("invalid led_num] {}", led_num);
-                panic!("invalid led_num] {}", led_num);
-            }
-
             component.queue.push(ScheduledPinsCommand {
                 schedule: component.timer.get_counter() + countdown,
-                pins_command: PinsCommand { led_num, command },
+                led_num,
+                command: Command::ChangeMode(mode),
             });
             if component.alarm.finished() {
                 component.alarm.schedule(countdown).unwrap();
@@ -147,40 +145,58 @@ impl LedPinsComponent {
         })
     }
 
-    // ピンの状態を変更し、次にスケジュールするものがあればそれを返す
-    fn do_pins_command(&mut self, pins_command: PinsCommand) -> Option<ScheduledPinsCommand> {
-        info!("Do {}", pins_command);
-
-        let next = match pins_command.command {
-            Command::HIGH => {
-                self.leds[pins_command.led_num].set_high().unwrap();
+    // モード切り替え HIGHとLOWは即座にピンの状態を変えるが、BLINKの場合次に動かすコマンドを返す
+    fn _change_mode(&mut self, led_num: usize, mode: Mode) -> Option<ScheduledPinsCommand> {
+        self.led_modes[led_num] = mode;
+        match mode {
+            Mode::HIGH => {
+                self.leds[led_num].set_high().unwrap();
                 None
             }
-            Command::LOW => {
-                self.leds[pins_command.led_num].set_low().unwrap();
+            Mode::LOW => {
+                self.leds[led_num].set_low().unwrap();
                 None
             }
-            Command::BLINK => {
-                if self.leds[pins_command.led_num].is_high().unwrap() {
-                    self.leds[pins_command.led_num].set_low().unwrap();
-                } else {
-                    self.leds[pins_command.led_num].set_high().unwrap();
-                }
+            Mode::BLINK => Some(ScheduledPinsCommand {
+                schedule: self.timer.get_counter() + 250.millis(),
+                led_num,
+                command: Command::ChangePin(Pin::HIGH),
+            }),
+        }
+    }
 
-                // 現在のモードがBLINKの時に限り次のスケジュールを返す
-                // (BLINKが送られてきても、現在の設定がLOWになっていることがある)
-                if self.led_modes[pins_command.led_num] == Command::BLINK {
+    // ピン切り替えかモード切り替えがやってくる。次にスケジュールするものがあればそれを返す
+    fn _handle_command(
+        &mut self,
+        led_num: usize,
+        command: Command,
+    ) -> Option<ScheduledPinsCommand> {
+        let current_mode = self.led_modes[led_num];
+        match (command, current_mode) {
+            (Command::ChangeMode(mode), _) => {
+                self._change_mode(led_num, mode);
+                None
+            }
+            // ピン切り替えはBLINKの時だけ扱う
+            (Command::ChangePin(pin), Mode::BLINK) => {
+                if pin == Pin::HIGH {
+                    self.leds[led_num].set_high().unwrap();
                     Some(ScheduledPinsCommand {
                         schedule: self.timer.get_counter() + 250.millis(),
-                        pins_command,
+                        led_num,
+                        command: Command::ChangePin(Pin::LOW),
                     })
                 } else {
-                    None
+                    self.leds[led_num].set_low().unwrap();
+                    Some(ScheduledPinsCommand {
+                        schedule: self.timer.get_counter() + 250.millis(),
+                        led_num,
+                        command: Command::ChangePin(Pin::HIGH),
+                    })
                 }
             }
-        };
-        self.led_modes[pins_command.led_num] = pins_command.command;
-        next
+            (Command::ChangePin(_), _) => None,
+        }
     }
 }
 
@@ -196,10 +212,9 @@ fn TIMER_IRQ_1() {
         while let Some(&next) = component.queue.peek() {
             if next.schedule <= now {
                 let _ = component.queue.pop();
-                component.do_pins_command(next.pins_command);
-                // if let Some(next) = component.do_pins_command(next.pins_command) {
-                //     component.queue.push(next);
-                // }
+                if let Some(next) = component._handle_command(next.led_num, next.command) {
+                    component.queue.push(next);
+                }
             } else {
                 break;
             }
