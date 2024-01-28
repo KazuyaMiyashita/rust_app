@@ -264,34 +264,61 @@ mod tests {
         }
     }
 
-    #[derive(Debug)]
     struct MockScheduler {
-        tick: u32,
-        next_schedule: Option<u32>,
+        counter: u32,
+        maybe_next_schedule: Option<u32>,
+        maybe_callback: Option<Box<dyn Fn()>>,
     }
     impl MockScheduler {
         fn new() -> Self {
             MockScheduler {
-                tick: 0,
-                next_schedule: None,
+                counter: 0,
+                maybe_next_schedule: None,
+                maybe_callback: None,
+            }
+        }
+        fn set_callback<F>(&mut self, callback: F)
+        where
+            F: Fn() + 'static,
+        {
+            self.maybe_callback = Some(Box::new(callback));
+        }
+        fn next(&mut self) {
+            self.counter += 1;
+            match (self.maybe_next_schedule, &self.maybe_callback) {
+                (Some(schedule), Some(callback)) if schedule == self.counter => {
+                    callback();
+                    // self.maybe_next_schedule = None; // ?
+                }
+                _ => (),
             }
         }
     }
     impl Scheduler<u32, u32> for MockScheduler {
         fn get_counter(&self) -> u32 {
-            self.tick
+            self.counter
         }
         fn finished(&self) -> bool {
-            self.next_schedule.is_none()
+            self.maybe_next_schedule.is_none()
         }
         fn schedule(&mut self, countdown: u32) {
-            self.next_schedule = Some(self.tick + countdown);
+            self.maybe_next_schedule = Some(self.counter + countdown);
         }
         fn schedule_at(&mut self, at: u32) {
-            self.next_schedule = Some(at);
+            self.maybe_next_schedule = Some(at);
         }
         fn clear_interrupt(&mut self) {
-            self.next_schedule = None;
+            self.maybe_next_schedule = None;
+        }
+    }
+    // maybe_callback: Box<dyn Fn()> が Debug を derive できないので
+    impl std::fmt::Debug for MockScheduler {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("MockScheduler")
+                .field("counter", &self.counter)
+                .field("maybe_next_schedule", &self.maybe_next_schedule)
+                .field("maybe_callback", &"Box<dyn Fn()>")
+                .finish()
         }
     }
 
@@ -305,19 +332,19 @@ mod tests {
             MockScheduler::new(),
         );
 
-        led_pins.scheduler().tick = 1;
+        led_pins.scheduler().counter = 1;
         led_pins.set_led_mode(0, LedMode::HIGH);
         led_pins.set_mode_later(0, LedMode::LOW, 100);
 
-        led_pins.scheduler().tick = 2;
+        led_pins.scheduler().counter = 2;
         led_pins.set_led_mode(1, LedMode::HIGH);
         led_pins.set_mode_later(1, LedMode::LOW, 100);
 
-        led_pins.scheduler().tick = 3;
+        led_pins.scheduler().counter = 3;
         led_pins.set_led_mode(2, LedMode::HIGH);
         led_pins.set_mode_later(2, LedMode::LOW, 100);
 
-        led_pins.scheduler().tick = 4;
+        led_pins.scheduler().counter = 4;
         led_pins.set_led_mode(3, LedMode::HIGH);
         led_pins.set_mode_later(3, LedMode::LOW, 100);
 
@@ -331,7 +358,7 @@ mod tests {
             ]
         );
 
-        led_pins.scheduler().tick = 101;
+        led_pins.scheduler().counter = 101;
         led_pins.handle_schedule();
         assert_eq!(
             led_pins.leds_status(),
@@ -343,7 +370,7 @@ mod tests {
             ]
         );
 
-        led_pins.scheduler().tick = 102;
+        led_pins.scheduler().counter = 102;
         led_pins.handle_schedule();
         assert_eq!(
             led_pins.leds_status(),
@@ -355,7 +382,7 @@ mod tests {
             ]
         );
 
-        led_pins.scheduler().tick = 103;
+        led_pins.scheduler().counter = 103;
         led_pins.handle_schedule();
         assert_eq!(
             led_pins.leds_status(),
@@ -367,7 +394,7 @@ mod tests {
             ]
         );
 
-        led_pins.scheduler().tick = 104;
+        led_pins.scheduler().counter = 104;
         led_pins.handle_schedule();
         assert_eq!(
             led_pins.leds_status(),
@@ -380,39 +407,42 @@ mod tests {
         );
     }
 
-    // #[test]
-    // fn test00() {
-    //     let mut led_pins: LedPins<u32, u32, MockLed, MockScheduler> = LedPins::init(
-    //         MockLed::new(),
-    //         MockLed::new(),
-    //         MockLed::new(),
-    //         MockLed::new(),
-    //         MockScheduler::new(),
-    //     );
+    #[test]
+    fn test00() {
+        let mut scheduler = MockScheduler::new();
+        let mut led_pins: LedPins<u32, u32, MockLed, MockScheduler> = LedPins::init(
+            MockLed::new(),
+            MockLed::new(),
+            MockLed::new(),
+            MockLed::new(),
+            scheduler,
+        );
+        scheduler.set_callback(|| led_pins.handle_schedule());
+        // |                      ^^^^^^^^ cannot borrow as mutable
 
-    //     led_pins.scheduler().tick = 1;
-    //     led_pins.set_led_mode(0, LedMode::HIGH);
-    //     println!("{:#?}", led_pins);
+        scheduler.counter = 1;
+        led_pins.set_led_mode(0, LedMode::HIGH);
+        println!("{:#?}", led_pins);
 
-    //     led_pins.set_mode_later(0, LedMode::LOW, 100);
-    //     println!("{:#?}", led_pins);
+        // led_pins.set_mode_later(0, LedMode::LOW, 100);
+        // println!("{:#?}", led_pins);
 
-    //     led_pins.scheduler().tick = 2;
-    //     led_pins.set_led_mode(1, LedMode::HIGH);
-    //     led_pins.set_mode_later(1, LedMode::LOW, 100);
+        // led_pins.scheduler().counter = 2;
+        // led_pins.set_led_mode(1, LedMode::HIGH);
+        // led_pins.set_mode_later(1, LedMode::LOW, 100);
 
-    //     led_pins.scheduler().tick = 3;
-    //     led_pins.set_led_mode(2, LedMode::HIGH);
-    //     led_pins.set_mode_later(2, LedMode::LOW, 100);
+        // led_pins.scheduler().counter = 3;
+        // led_pins.set_led_mode(2, LedMode::HIGH);
+        // led_pins.set_mode_later(2, LedMode::LOW, 100);
 
-    //     led_pins.scheduler().tick = 4;
-    //     led_pins.set_led_mode(3, LedMode::HIGH);
-    //     led_pins.set_mode_later(3, LedMode::LOW, 100);
+        // led_pins.scheduler().counter = 4;
+        // led_pins.set_led_mode(3, LedMode::HIGH);
+        // led_pins.set_mode_later(3, LedMode::LOW, 100);
 
-    //     println!("{:#?}", led_pins);
+        // println!("{:#?}", led_pins);
 
-    //     panic!();
-    // }
+        panic!();
+    }
 
     #[test]
     fn test1() {
@@ -430,7 +460,7 @@ mod tests {
             Some(ScheduledPinsCommand {
                 schedule: 250,
                 led_num: 0,
-                command: Command::ChangeLedStatus(LedStatus::HIGH)
+                command: Command::ChangeLedStatus(LedStatus::HIGH) // FIXME 挙動変わった
             })
             .as_ref()
         );
@@ -438,15 +468,15 @@ mod tests {
         led_pins.handle_schedule();
         assert_eq!(led_pins.leds[0].get_status(), LedStatus::LOW);
 
-        led_pins.scheduler().tick = 250;
+        led_pins.scheduler().counter = 250;
         led_pins.handle_schedule();
         assert_eq!(led_pins.leds[0].get_status(), LedStatus::HIGH);
 
-        led_pins.scheduler().tick = 499;
+        led_pins.scheduler().counter = 499;
         led_pins.handle_schedule();
         assert_eq!(led_pins.leds[0].get_status(), LedStatus::HIGH);
 
-        led_pins.scheduler().tick = 500;
+        led_pins.scheduler().counter = 500;
         led_pins.handle_schedule();
         assert_eq!(led_pins.leds[0].get_status(), LedStatus::LOW);
         assert_eq!(
@@ -460,7 +490,7 @@ mod tests {
         );
 
         // BLINKモードからLOWモードに変える
-        led_pins.scheduler().tick = 501;
+        led_pins.scheduler().counter = 501;
         led_pins.set_led_mode(0, LedMode::LOW);
         assert_eq!(led_pins.leds[0].get_status(), LedStatus::LOW);
 
@@ -474,7 +504,7 @@ mod tests {
             })
             .as_ref()
         );
-        led_pins.scheduler().tick = 750;
+        led_pins.scheduler().counter = 750;
         println!("{:#?}", led_pins);
         led_pins.handle_schedule();
         assert_eq!(led_pins.leds[0].get_status(), LedStatus::LOW);
