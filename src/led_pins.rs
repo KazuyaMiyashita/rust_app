@@ -1,9 +1,10 @@
 use defmt::{error, info, write};
 
+use bsp::hal::fugit::ExtU32;
 use bsp::hal::{gpio, pac, pac::interrupt};
 use core::cell::RefCell;
 use critical_section::Mutex;
-use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::digital::v2::{InputPin, OutputPin};
 use fugit::MicrosDurationU32;
 use rp_pico as bsp;
 use rp_pico::hal::timer::{Alarm, Alarm1, Instant};
@@ -52,13 +53,15 @@ struct PinsCommand {
 pub enum Command {
     HIGH,
     LOW,
+    BLINK,
 }
 
 pub struct LedPinsComponent {
     leds: [LedPin; 4],
+    led_modes: [Command; 4],
     timer: Timer,
     alarm: Alarm1,
-    queue: FixedSizePriorityQueue<ScheduledPinsCommand, 5>,
+    queue: FixedSizePriorityQueue<ScheduledPinsCommand, 20>,
 }
 
 static GLOBAL_LED_PINS_COMPONENT: Mutex<RefCell<Option<LedPinsComponent>>> =
@@ -85,6 +88,7 @@ impl LedPinsComponent {
                         led2.into_dyn_pin(),
                         led3.into_dyn_pin(),
                     ],
+                    led_modes: [Command::BLINK; 4],
                     timer,
                     alarm,
                     queue: FixedSizePriorityQueue::new(),
@@ -112,6 +116,9 @@ impl LedPinsComponent {
             }
 
             component.do_pins_command(PinsCommand { led_num, command });
+            // if let Some(next) = component.do_pins_command(PinsCommand { led_num, command }) {
+            //     component.queue.push(next);
+            // }
         })
     }
 
@@ -135,26 +142,51 @@ impl LedPinsComponent {
                 pins_command: PinsCommand { led_num, command },
             });
             if component.alarm.finished() {
-                info!("led alarm is finished. new alarm set.");
                 component.alarm.schedule(countdown).unwrap();
             }
         })
     }
 
-    fn do_pins_command(&mut self, pins_command: PinsCommand) {
+    // ピンの状態を変更し、次にスケジュールするものがあればそれを返す
+    fn do_pins_command(&mut self, pins_command: PinsCommand) -> Option<ScheduledPinsCommand> {
         info!("Do {}", pins_command);
 
-        match pins_command.command {
-            Command::HIGH => self.leds[pins_command.led_num].set_high().unwrap(),
-            Command::LOW => self.leds[pins_command.led_num].set_low().unwrap(),
-        }
+        let next = match pins_command.command {
+            Command::HIGH => {
+                self.leds[pins_command.led_num].set_high().unwrap();
+                None
+            }
+            Command::LOW => {
+                self.leds[pins_command.led_num].set_low().unwrap();
+                None
+            }
+            Command::BLINK => {
+                if self.leds[pins_command.led_num].is_high().unwrap() {
+                    self.leds[pins_command.led_num].set_low().unwrap();
+                } else {
+                    self.leds[pins_command.led_num].set_high().unwrap();
+                }
+
+                // 現在のモードがBLINKの時に限り次のスケジュールを返す
+                // (BLINKが送られてきても、現在の設定がLOWになっていることがある)
+                if self.led_modes[pins_command.led_num] == Command::BLINK {
+                    Some(ScheduledPinsCommand {
+                        schedule: self.timer.get_counter() + 250.millis(),
+                        pins_command,
+                    })
+                } else {
+                    None
+                }
+            }
+        };
+        self.led_modes[pins_command.led_num] = pins_command.command;
+        next
     }
 }
 
 #[interrupt]
 fn TIMER_IRQ_1() {
     critical_section::with(|cs| {
-        info!("TIMER_IRQ_1");
         let mut binding = GLOBAL_LED_PINS_COMPONENT.borrow(cs).borrow_mut();
         let component = binding.as_mut().unwrap();
 
@@ -162,9 +194,12 @@ fn TIMER_IRQ_1() {
 
         // キューに溜まったもののうち現在より前のものは全て実行
         while let Some(&next) = component.queue.peek() {
-            if next.schedule < now {
+            if next.schedule <= now {
                 let _ = component.queue.pop();
                 component.do_pins_command(next.pins_command);
+                // if let Some(next) = component.do_pins_command(next.pins_command) {
+                //     component.queue.push(next);
+                // }
             } else {
                 break;
             }
