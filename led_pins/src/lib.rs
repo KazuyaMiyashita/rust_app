@@ -3,20 +3,27 @@
 use core::marker::{Copy, PhantomData};
 use fixed_size_priority_queue::FixedSizePriorityQueue;
 
-trait Instant {
-    fn add<D: Duration>(&self, duration: D) -> Self;
+pub trait Instant {
+    fn add_millis(&self, millis: u32) -> Self;
 }
-trait Duration: Copy {
+pub trait Duration: Copy {
     fn from_millis(millis: u32) -> Self;
     fn to_millis(&self) -> u32;
 }
 
-trait Timer<I: Instant> {
+pub trait Led {
+    #[cfg(test)]
+    fn get_status(&self) -> LedStatus;
+
+    fn set_status(&mut self, led_status: LedStatus);
+}
+
+pub trait Timer<I: Instant> {
     fn get_counter(&self) -> I;
 }
-trait Alarm<I: Instant> {
+pub trait Alarm<I: Instant, D: Duration> {
     fn finished(&self) -> bool;
-    fn schedule<D: Duration>(&mut self, countdown: D);
+    fn schedule(&mut self, countdown: D);
     fn schedule_at(&mut self, at: I);
     fn clear_interrupt(&mut self);
 }
@@ -60,18 +67,12 @@ pub enum LedMode {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(test, derive(Debug))]
-
-enum LedStatus {
+pub enum LedStatus {
     HIGH,
     LOW,
 }
 
-trait Led {
-    fn get_status(&self) -> LedStatus;
-    fn set_status(&mut self, led_status: LedStatus);
-}
-
-pub struct LedPins<I: Instant + Ord + Copy, D: Duration, L: Led, T: Timer<I>, A: Alarm<I>> {
+pub struct LedPins<I: Instant + Ord + Copy, D: Duration, L: Led, T: Timer<I>, A: Alarm<I, D>> {
     leds: [L; 4],
     led_modes: [LedMode; 4],
     queue: FixedSizePriorityQueue<ScheduledPinsCommand<I>, 20>,
@@ -86,7 +87,7 @@ where
     D: Duration,
     L: Led,
     T: Timer<I>,
-    A: Alarm<I>,
+    A: Alarm<I, D>,
 {
     pub fn init(led0: L, led1: L, led2: L, led3: L, timer: T, alarm: A) -> Self {
         LedPins {
@@ -115,7 +116,7 @@ where
         }
 
         self.queue.push(ScheduledPinsCommand {
-            schedule: self.timer.get_counter().add(countdown),
+            schedule: self.timer.get_counter().add_millis(countdown.to_millis()),
             led_num,
             command: Command::ChangeLedMode(led_mode),
         });
@@ -141,10 +142,7 @@ where
                 None
             }
             LedMode::BLINK => Some(ScheduledPinsCommand {
-                schedule: self
-                    .timer
-                    .get_counter()
-                    .add::<D>(Duration::from_millis(250)),
+                schedule: self.timer.get_counter().add_millis(250),
                 led_num,
                 command: Command::ChangeLedStatus(LedStatus::HIGH),
             }),
@@ -168,20 +166,14 @@ where
                 if pin == LedStatus::HIGH {
                     self.leds[led_num].set_status(LedStatus::HIGH);
                     Some(ScheduledPinsCommand {
-                        schedule: self
-                            .timer
-                            .get_counter()
-                            .add::<D>(Duration::from_millis(250)),
+                        schedule: self.timer.get_counter().add_millis(250),
                         led_num,
                         command: Command::ChangeLedStatus(LedStatus::LOW),
                     })
                 } else {
                     self.leds[led_num].set_status(LedStatus::LOW);
                     Some(ScheduledPinsCommand {
-                        schedule: self
-                            .timer
-                            .get_counter()
-                            .add::<D>(Duration::from_millis(250)),
+                        schedule: self.timer.get_counter().add_millis(250),
                         led_num,
                         command: Command::ChangeLedStatus(LedStatus::HIGH),
                     })
@@ -191,7 +183,7 @@ where
         }
     }
 
-    fn handle_schedule(&mut self) {
+    pub fn handle_schedule(&mut self) {
         let now = self.timer.get_counter();
 
         // キューに溜まったもののうち現在より前のものは全て実行
@@ -229,8 +221,8 @@ mod tests {
     use crate::*;
 
     impl Instant for u32 {
-        fn add<D: Duration>(&self, duration: D) -> Self {
-            self + duration.to_millis()
+        fn add_millis(&self, millis: u32) -> Self {
+            self + millis
         }
     }
     impl Duration for u32 {

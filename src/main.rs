@@ -8,7 +8,7 @@
 mod button_input_queue;
 mod console;
 mod display_aqm0802;
-mod led_pins;
+mod global_led_pins;
 
 use bsp::entry;
 use defmt::{error, info};
@@ -33,8 +33,9 @@ use core::alloc::Layout;
 extern crate alloc;
 
 use crate::button_input_queue::ButtonInput;
-use crate::led_pins::{LedPinsComponent, Mode};
 use button_input_queue::ButtonInputQueue;
+use global_led_pins as GlobalLedPins;
+use led_pins::LedMode;
 
 // Pin types quickly become very long!
 // We'll create some type aliases using `type` to help with that
@@ -116,7 +117,7 @@ fn main() -> ! {
         timer.alarm_0().unwrap(),
     );
 
-    LedPinsComponent::init(
+    GlobalLedPins::init(
         pins.gpio13.into_push_pull_output(),
         pins.gpio12.into_push_pull_output(),
         pins.gpio11.into_push_pull_output(),
@@ -129,8 +130,8 @@ fn main() -> ! {
     writeln!(console, "Hello!").unwrap();
 
     for i in 0..=3 {
-        LedPinsComponent::set_mode(i, Mode::HIGH);
-        LedPinsComponent::set_mode_later(i, Mode::LOW, 500.millis());
+        GlobalLedPins::set_led_mode(i, LedMode::HIGH);
+        GlobalLedPins::set_mode_later(i, LedMode::LOW, 500.millis());
     }
     for _ in 0..=7 {
         write!(console, ".").unwrap();
@@ -145,26 +146,26 @@ fn main() -> ! {
             counter[0] += 1;
             writeln!(console, "Push! B0").unwrap();
             writeln!(console, "cnt:{}", counter[0]).unwrap();
-            LedPinsComponent::set_mode(0, Mode::BLINK);
-            LedPinsComponent::set_mode_later(0, Mode::LOW, 2000.millis());
+            GlobalLedPins::set_led_mode(0, LedMode::BLINK);
+            GlobalLedPins::set_mode_later(0, LedMode::LOW, 2000.millis());
         } else if pushed_buttons.contains(&ButtonInput::Button1) {
             counter[1] += 1;
             writeln!(console, "Push! B1").unwrap();
             writeln!(console, "cnt:{}", counter[1]).unwrap();
-            LedPinsComponent::set_mode(1, Mode::BLINK);
-            LedPinsComponent::set_mode_later(1, Mode::LOW, 2000.millis());
+            GlobalLedPins::set_led_mode(1, LedMode::BLINK);
+            GlobalLedPins::set_mode_later(1, LedMode::LOW, 2000.millis());
         } else if pushed_buttons.contains(&ButtonInput::Button2) {
             counter[2] += 1;
             writeln!(console, "Push! B2").unwrap();
             writeln!(console, "cnt:{}", counter[2]).unwrap();
-            LedPinsComponent::set_mode(2, Mode::BLINK);
-            LedPinsComponent::set_mode_later(2, Mode::LOW, 5200000.millis());
+            GlobalLedPins::set_led_mode(2, LedMode::BLINK);
+            GlobalLedPins::set_mode_later(2, LedMode::LOW, 5200000.millis());
         } else if pushed_buttons.contains(&ButtonInput::Button3) {
             counter[3] += 1;
             writeln!(console, "Push! B3").unwrap();
             writeln!(console, "cnt:{}", counter[3]).unwrap();
-            LedPinsComponent::set_mode(3, Mode::BLINK);
-            LedPinsComponent::set_mode_later(3, Mode::LOW, 2000.millis());
+            GlobalLedPins::set_led_mode(3, LedMode::BLINK);
+            GlobalLedPins::set_mode_later(3, LedMode::LOW, 2000.millis());
         }
 
         // info!("{:02}{:02}{:02}{:02}", counter[0], counter[1], counter[2], counter[3]);
