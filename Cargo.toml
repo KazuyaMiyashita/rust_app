@@ -1,3 +1,6 @@
+[workspace]
+members = ["led_pins", "fixed_size_priority_queue"]
+
 [package]
 edition = "2021"
 name = "rust_app"
