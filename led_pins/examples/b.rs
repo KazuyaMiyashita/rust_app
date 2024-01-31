@@ -1,23 +1,11 @@
-trait Scheduler {
-    fn schedule_at(&mut self, at: u32);
-}
+use std::marker::PhantomData;
 
-struct App<'a, S: Scheduler> {
-    scheduler: &'a mut S,
-}
-impl<'a, S> App<'a, S>
+trait Scheduler<F>
 where
-    S: Scheduler,
+    F: Fn() -> (),
 {
-    pub fn new(scheduler: &'a mut S) -> Self {
-        App { scheduler }
-    }
-    pub fn set_schedule_at(&mut self, at: u32) {
-        self.scheduler.schedule_at(at);
-    }
-    pub fn interrupt_handler(&mut self) {
-        println!("interrut_handler called.")
-    }
+    fn schedule_at(&mut self, at: u32);
+    fn set_callback(&mut self, f: F);
 }
 
 struct MockScheduler<F>
@@ -51,31 +39,58 @@ where
         }
         self.counter += 1;
     }
-    fn set_callback(&mut self, f: F) {
-        self.maybe_callback = Some(Box::new(f))
-    }
 }
-impl<F> Scheduler for MockScheduler<F>
+impl<F> Scheduler<F> for MockScheduler<F>
 where
     F: Fn() -> (),
 {
     fn schedule_at(&mut self, at: u32) {
         self.maybe_next_schedule = Some(at);
     }
+    fn set_callback(&mut self, f: F) {
+        self.maybe_callback = Some(Box::new(f))
+    }
+}
+
+struct App<'a, S, F> {
+    scheduler: &'a mut S,
+    _phantom: PhantomData<F>,
+}
+impl<'a, S, F> App<'a, S, F>
+where
+    S: Scheduler<F>,
+    F: Fn() -> (),
+{
+    pub fn new(scheduler: &'a mut S) -> Self {
+        App {
+            scheduler,
+            _phantom: PhantomData {},
+        }
+    }
+
+    pub fn hello(&self) {
+        println!("hello!");
+    }
+
+    pub fn schedule_at(&mut self, at: u32) {
+        self.scheduler.schedule_at(at);
+    }
 }
 
 fn main() {
     let mut scheduler = MockScheduler::new();
     let mut app = App::new(&mut scheduler);
-    // |                            -------------- first mutable borrow occurs here
-
-    // scheduler.set_callback(|| app.interrupt_handler());
-    //                     ^^^^^^^^^^^^^^^^^^^^^^^^^^ cyclic type of infinite size
-    scheduler.set_callback(|| println!("a"));
-    // ^^^^^^^^^ second mutable borrow occurs here
-
-    app.set_schedule_at(2);
+    app.hello();
+    app.scheduler.set_callback(|| println!("a"));
+    app.schedule_at(2);
     for _ in 0..=3 {
+        println!("counter: {}", scheduler.counter);
         scheduler.next();
     }
+    // hello!
+    // counter: 0
+    // counter: 1
+    // counter: 2
+    // a
+    // counter: 3
 }
