@@ -52,14 +52,14 @@ where
     }
 }
 
-struct App<'a, S, F> {
-    scheduler: &'a mut S,
+struct App<'a, F, S> {
     _phantom: PhantomData<F>,
+    scheduler: &'a mut S,
 }
-impl<'a, S, F> App<'a, S, F>
+impl<'a, F, S> App<'a, F, S>
 where
-    S: Scheduler<F>,
     F: Fn() -> (),
+    S: Scheduler<F>,
 {
     pub fn new(scheduler: &'a mut S) -> Self {
         App {
