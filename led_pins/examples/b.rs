@@ -8,15 +8,15 @@ where
     fn set_callback(&mut self, f: F);
 }
 
-struct MockScheduler<F>
+struct MockScheduler<'a, F>
 where
     F: Fn() -> (),
 {
     counter: u32,
     maybe_next_schedule: Option<u32>,
-    maybe_callback: Option<Box<F>>,
+    maybe_callback: Option<&'a F>,
 }
-impl<F> MockScheduler<F>
+impl<F> MockScheduler<'_, F>
 where
     F: Fn() -> (),
 {
@@ -40,7 +40,7 @@ where
         self.counter += 1;
     }
 }
-impl<F> Scheduler<F> for MockScheduler<F>
+impl<F> Scheduler<F> for MockScheduler<'_, F>
 where
     F: Fn() -> (),
 {
@@ -48,7 +48,7 @@ where
         self.maybe_next_schedule = Some(at);
     }
     fn set_callback(&mut self, f: F) {
-        self.maybe_callback = Some(Box::new(f))
+        self.maybe_callback = Some(&f)
     }
 }
 
@@ -58,8 +58,8 @@ struct App<'a, F, S> {
 }
 impl<'a, F, S> App<'a, F, S>
 where
-    F: Fn() -> (),
-    S: Scheduler<F>,
+    F: Fn() -> () + 'a,
+    S: Scheduler<&'a F>,
 {
     pub fn new(scheduler: &'a mut S) -> Self {
         App {
@@ -81,8 +81,11 @@ fn main() {
     let mut scheduler = MockScheduler::new();
     let mut app = App::new(&mut scheduler);
     app.hello();
-    app.scheduler.set_callback(|| println!("a"));
-    app.schedule_at(2);
+    app.scheduler.set_callback(&|| app.hello());
+    //                          ^^^^^^^^^^^^^^ cyclic type of infinite size
+    // app.scheduler.set_callback(&|| println!(""));
+
+    app.scheduler.schedule_at(2);
     for _ in 0..=3 {
         println!("counter: {}", scheduler.counter);
         scheduler.next();

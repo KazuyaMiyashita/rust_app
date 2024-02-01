@@ -463,11 +463,9 @@ mod tests {
             MockLed::new(),
             &mut scheduler,
         );
-        led_pins
-            .scheduler
-            .set_callback(|| led_pins.handle_schedule());
+        led_pins.scheduler.set_callback(|| println!(""));
         //                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cyclic type of infinite size
-        scheduler.counter = 1;
+        led_pins.scheduler.counter = 1;
         led_pins.set_led_mode(0, LedMode::HIGH);
         println!("{:#?}", led_pins);
 
