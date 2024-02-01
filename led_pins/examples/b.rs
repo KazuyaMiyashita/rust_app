@@ -58,32 +58,32 @@ where
     S: Scheduler<F>,
 {
     scheduler: &'a mut S,
+    _phantom: PhantomData<F>,
 }
 impl<'a, F, S> App<'a, F, S>
 where
     F: Fn() -> (),
     S: Scheduler<F>,
 {
-    pub fn new(scheduler: &mut S) -> Self {
-        App { scheduler }
+    pub fn new(scheduler: &'a mut S) -> Self {
+        App {
+            scheduler,
+            _phantom: PhantomData {},
+        }
     }
 
     pub fn hello(&self) {
         println!("hello!");
     }
-
-    pub fn schedule_at(&mut self, at: u32) {
-        self.scheduler.schedule_at(at);
-    }
 }
 
 fn main() {
     let mut scheduler = MockScheduler::new();
-    let mut app = App::new(&mut scheduler);
+    let app = App::new(&mut scheduler);
     app.hello();
-    app.scheduler.set_callback(|| app.hello());
+    // app.scheduler.set_callback(|| app.hello());
     //                          ^^^^^^^^^^^^^^ cyclic type of infinite size
-    // app.scheduler.set_callback(&|| println!(""));
+    app.scheduler.set_callback(&|| println!("a"));
 
     app.scheduler.schedule_at(2);
     for _ in 0..=3 {
