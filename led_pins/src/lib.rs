@@ -1,5 +1,8 @@
 #![cfg_attr(not(test), no_std)]
 
+// extern crate alloc;
+// use alloc::rc::Rc;
+// use core::cell::RefCell;
 use core::marker::{Copy, PhantomData};
 use fixed_size_priority_queue::FixedSizePriorityQueue;
 
@@ -18,10 +21,7 @@ pub trait Led {
     fn set_status(&mut self, led_status: LedStatus);
 }
 
-pub trait Scheduler<I: Instant, D: Duration, F>
-where
-    F: Fn() -> (),
-{
+pub trait Scheduler<I: Instant, D: Duration> {
     // for Timer
     fn get_counter(&self) -> I;
 
@@ -31,12 +31,14 @@ where
     fn schedule_at(&mut self, at: I);
     fn clear_interrupt(&mut self);
 
-    // other
-    fn set_callback(&mut self, f: F);
+    // // other
+    // fn set_callback<F: Fn() + 'a>(&mut self, f: F);
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
+
 struct ScheduledPinsCommand<I: Instant + Ord + Copy> {
     schedule: I,
     led_num: usize,
@@ -57,6 +59,7 @@ impl<I: Instant + Ord + Copy> PartialOrd for ScheduledPinsCommand<I> {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 
 enum Command {
     ChangeLedMode(LedMode),
@@ -65,6 +68,7 @@ enum Command {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
 
 pub enum LedMode {
     HIGH,
@@ -72,64 +76,42 @@ pub enum LedMode {
     BLINK,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(test, derive(Debug))]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+// #[cfg_attr(test, derive(Debug))]
 pub enum LedStatus {
     HIGH,
     LOW,
 }
-
-pub struct LedPins<'a, I, D, L, F, S>
+#[cfg_attr(test, derive(Debug))]
+#[derive(Debug)]
+pub struct LedPins<I, D, L, S>
 where
     I: Instant + Ord + Copy,
     D: Duration,
     L: Led,
-    F: Fn() -> (),
-    S: Scheduler<I, D, F>,
+    S: Scheduler<I, D>,
 {
     leds: [L; 4],
     led_modes: [LedMode; 4],
     queue: FixedSizePriorityQueue<ScheduledPinsCommand<I>, 20>,
-    scheduler: &'a mut S,
+    scheduler: S,
     _phantom_d: PhantomData<D>,
-    _phantom_f: PhantomData<F>,
 }
 
-#[cfg(test)]
-impl<'a, I, D, L, F, S> std::fmt::Debug for LedPins<'a, I, D, L, F, S>
-where
-    I: Instant + Ord + Copy + std::fmt::Debug,
-    D: Duration + std::fmt::Debug,
-    L: Led + std::fmt::Debug,
-    F: Fn() -> (),
-    S: Scheduler<I, D, F>,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LedPins")
-            .field("leds", &self.leds)
-            .field("led_modes", &self.led_modes)
-            .field("queue", &self.queue)
-            .field("scheduler", &format_args!("Fn() -> ()")) // クロージャ型のデバッグ表示
-            .finish()
-    }
-}
-
-impl<'a, I, D, L, F, S> LedPins<'a, I, D, L, F, S>
+impl<I, D, L, S> LedPins<I, D, L, S>
 where
     I: Instant + Ord + Copy,
     D: Duration,
     L: Led,
-    F: Fn() -> (),
-    S: Scheduler<I, D, F>,
+    S: Scheduler<I, D>,
 {
-    pub fn init(led0: L, led1: L, led2: L, led3: L, scheduler: &'a mut S) -> Self {
+    pub fn init(led0: L, led1: L, led2: L, led3: L, scheduler: S) -> Self {
         LedPins {
             leds: [led0, led1, led2, led3],
             led_modes: [LedMode::LOW; 4],
             queue: FixedSizePriorityQueue::new(),
             scheduler,
             _phantom_d: PhantomData {},
-            _phantom_f: PhantomData {},
         }
     }
 
@@ -238,11 +220,15 @@ where
             }
         }
 
-        // キューに残りがあれば、タイマーセット
-        if let Some(next) = self.queue.peek() {
-            self.scheduler.schedule_at(next.schedule);
+        // タイマーが完了していて、キューに残りがあれば、タイマーセット
+        if self.scheduler.finished() {
+            if let Some(next) = self.queue.peek() {
+                self.scheduler.schedule_at(next.schedule);
+            }
         }
     }
+
+    // テスト用
 
     #[cfg(test)]
     fn leds_status(&mut self) -> [LedStatus; 4] {
@@ -252,11 +238,6 @@ where
             self.leds[2].get_status(),
             self.leds[3].get_status(),
         ]
-    }
-
-    #[cfg(test)]
-    fn scheduler(&mut self) -> &mut S {
-        &mut self.scheduler
     }
 }
 
@@ -298,18 +279,13 @@ mod tests {
         }
     }
 
-    struct MockScheduler<F>
-    where
-        F: Fn() -> (),
-    {
+    // #[cfg_attr(test, derive(Debug))]
+    struct MockScheduler {
         counter: u32,
         maybe_next_schedule: Option<u32>,
-        maybe_callback: Option<Box<F>>,
+        maybe_callback: Option<Box<dyn Fn() + 'static>>,
     }
-    impl<F> MockScheduler<F>
-    where
-        F: Fn() -> (),
-    {
+    impl MockScheduler {
         fn new() -> Self {
             MockScheduler {
                 counter: 0,
@@ -317,23 +293,8 @@ mod tests {
                 maybe_callback: None,
             }
         }
-        fn next(&mut self) {
-            match self.maybe_next_schedule {
-                Some(schedule) if schedule == self.counter => {
-                    if let Some(callback) = &self.maybe_callback {
-                        callback()
-                    }
-                    self.maybe_next_schedule = None;
-                }
-                _ => (),
-            }
-            self.counter += 1;
-        }
     }
-    impl<F> Scheduler<u32, u32, F> for MockScheduler<F>
-    where
-        F: Fn() -> (),
-    {
+    impl Scheduler<u32, u32> for MockScheduler {
         fn get_counter(&self) -> u32 {
             self.counter
         }
@@ -349,212 +310,210 @@ mod tests {
         fn clear_interrupt(&mut self) {
             self.maybe_next_schedule = None;
         }
-        fn set_callback(&mut self, f: F) {
-            self.maybe_callback = Some(Box::new(f))
-        }
     }
-    // maybe_callback: Box<dyn Fn()> が Debug を derive できないので
-    impl<F> std::fmt::Debug for MockScheduler<F>
-    where
-        F: Fn() -> (),
-    {
+    // maybe_callback: Option<Box<dyn Fn() + 'static>> が Debug を derive できないので
+    impl std::fmt::Debug for MockScheduler {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             f.debug_struct("MockScheduler")
                 .field("counter", &self.counter)
                 .field("maybe_next_schedule", &self.maybe_next_schedule)
-                .field("maybe_callback", &"Box<dyn Fn()>")
+                .field(
+                    "maybe_callback",
+                    match &self.maybe_callback {
+                        Some(_) => &"Some(Box<dyn Fn() + 'static>)",
+                        None => &"None",
+                    },
+                )
                 .finish()
         }
     }
 
-    // #[test]
-    // fn test0() {
-    //     let mut scheduler = MockScheduler::new();
-    //     let mut led_pins = LedPins::init(
-    //         MockLed::new(),
-    //         MockLed::new(),
-    //         MockLed::new(),
-    //         MockLed::new(),
-    //         &mut scheduler,
-    //     );
-
-    //     led_pins.scheduler().counter = 1;
-    //     led_pins.set_led_mode(0, LedMode::HIGH);
-    //     led_pins.set_mode_later(0, LedMode::LOW, 100);
-
-    //     led_pins.scheduler().counter = 2;
-    //     led_pins.set_led_mode(1, LedMode::HIGH);
-    //     led_pins.set_mode_later(1, LedMode::LOW, 100);
-
-    //     led_pins.scheduler().counter = 3;
-    //     led_pins.set_led_mode(2, LedMode::HIGH);
-    //     led_pins.set_mode_later(2, LedMode::LOW, 100);
-
-    //     led_pins.scheduler().counter = 4;
-    //     led_pins.set_led_mode(3, LedMode::HIGH);
-    //     led_pins.set_mode_later(3, LedMode::LOW, 100);
-
-    //     assert_eq!(
-    //         led_pins.leds_status(),
-    //         [
-    //             LedStatus::HIGH,
-    //             LedStatus::HIGH,
-    //             LedStatus::HIGH,
-    //             LedStatus::HIGH
-    //         ]
-    //     );
-
-    //     led_pins.scheduler().counter = 101;
-    //     led_pins.handle_schedule();
-    //     assert_eq!(
-    //         led_pins.leds_status(),
-    //         [
-    //             LedStatus::LOW,
-    //             LedStatus::HIGH,
-    //             LedStatus::HIGH,
-    //             LedStatus::HIGH
-    //         ]
-    //     );
-
-    //     led_pins.scheduler().counter = 102;
-    //     led_pins.handle_schedule();
-    //     assert_eq!(
-    //         led_pins.leds_status(),
-    //         [
-    //             LedStatus::LOW,
-    //             LedStatus::LOW,
-    //             LedStatus::HIGH,
-    //             LedStatus::HIGH
-    //         ]
-    //     );
-
-    //     led_pins.scheduler().counter = 103;
-    //     led_pins.handle_schedule();
-    //     assert_eq!(
-    //         led_pins.leds_status(),
-    //         [
-    //             LedStatus::LOW,
-    //             LedStatus::LOW,
-    //             LedStatus::LOW,
-    //             LedStatus::HIGH
-    //         ]
-    //     );
-
-    //     led_pins.scheduler().counter = 104;
-    //     led_pins.handle_schedule();
-    //     assert_eq!(
-    //         led_pins.leds_status(),
-    //         [
-    //             LedStatus::LOW,
-    //             LedStatus::LOW,
-    //             LedStatus::LOW,
-    //             LedStatus::LOW
-    //         ]
-    //     );
-    // }
-
     #[test]
-    fn test00() {
-        let mut scheduler = MockScheduler::new();
+    fn test0() {
         let mut led_pins = LedPins::init(
             MockLed::new(),
             MockLed::new(),
             MockLed::new(),
             MockLed::new(),
-            &mut scheduler,
+            MockScheduler::new(),
         );
-        led_pins.scheduler.set_callback(|| println!(""));
-        //                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cyclic type of infinite size
+
         led_pins.scheduler.counter = 1;
+        led_pins.set_led_mode(0, LedMode::HIGH);
+        led_pins.set_mode_later(0, LedMode::LOW, 100);
+
+        led_pins.scheduler.counter = 2;
+        led_pins.set_led_mode(1, LedMode::HIGH);
+        led_pins.set_mode_later(1, LedMode::LOW, 100);
+
+        led_pins.scheduler.counter = 3;
+        led_pins.set_led_mode(2, LedMode::HIGH);
+        led_pins.set_mode_later(2, LedMode::LOW, 100);
+
+        led_pins.scheduler.counter = 4;
+        led_pins.set_led_mode(3, LedMode::HIGH);
+        led_pins.set_mode_later(3, LedMode::LOW, 100);
+
+        assert_eq!(
+            led_pins.leds_status(),
+            [
+                LedStatus::HIGH,
+                LedStatus::HIGH,
+                LedStatus::HIGH,
+                LedStatus::HIGH
+            ]
+        );
+
+        led_pins.scheduler.counter = 101;
+        led_pins.handle_schedule();
+        assert_eq!(
+            led_pins.leds_status(),
+            [
+                LedStatus::LOW,
+                LedStatus::HIGH,
+                LedStatus::HIGH,
+                LedStatus::HIGH
+            ]
+        );
+
+        led_pins.scheduler.counter = 102;
+        led_pins.handle_schedule();
+        assert_eq!(
+            led_pins.leds_status(),
+            [
+                LedStatus::LOW,
+                LedStatus::LOW,
+                LedStatus::HIGH,
+                LedStatus::HIGH
+            ]
+        );
+
+        led_pins.scheduler.counter = 103;
+        led_pins.handle_schedule();
+        assert_eq!(
+            led_pins.leds_status(),
+            [
+                LedStatus::LOW,
+                LedStatus::LOW,
+                LedStatus::LOW,
+                LedStatus::HIGH
+            ]
+        );
+
+        led_pins.scheduler.counter = 104;
+        led_pins.handle_schedule();
+        assert_eq!(
+            led_pins.leds_status(),
+            [
+                LedStatus::LOW,
+                LedStatus::LOW,
+                LedStatus::LOW,
+                LedStatus::LOW
+            ]
+        );
+    }
+
+    #[test]
+    fn test00() {
+        let mut led_pins = LedPins::init(
+            MockLed::new(),
+            MockLed::new(),
+            MockLed::new(),
+            MockLed::new(),
+            MockScheduler::new(),
+        );
+
+        led_pins.scheduler.counter = 1;
+        led_pins.handle_schedule();
         led_pins.set_led_mode(0, LedMode::HIGH);
         println!("{:#?}", led_pins);
 
-        // led_pins.set_mode_later(0, LedMode::LOW, 100);
-        // println!("{:#?}", led_pins);
+        led_pins.set_mode_later(0, LedMode::LOW, 100);
+        println!("{:#?}", led_pins);
 
-        // led_pins.scheduler().counter = 2;
-        // led_pins.set_led_mode(1, LedMode::HIGH);
-        // led_pins.set_mode_later(1, LedMode::LOW, 100);
+        led_pins.scheduler.counter = 2;
+        led_pins.handle_schedule();
+        led_pins.set_led_mode(1, LedMode::HIGH);
+        led_pins.set_mode_later(1, LedMode::LOW, 100);
 
-        // led_pins.scheduler().counter = 3;
-        // led_pins.set_led_mode(2, LedMode::HIGH);
-        // led_pins.set_mode_later(2, LedMode::LOW, 100);
+        led_pins.scheduler.counter = 3;
+        led_pins.handle_schedule();
+        led_pins.set_led_mode(2, LedMode::HIGH);
+        led_pins.set_mode_later(2, LedMode::LOW, 100);
 
-        // led_pins.scheduler().counter = 4;
-        // led_pins.set_led_mode(3, LedMode::HIGH);
-        // led_pins.set_mode_later(3, LedMode::LOW, 100);
+        led_pins.scheduler.counter = 4;
+        led_pins.handle_schedule();
+        led_pins.set_led_mode(3, LedMode::HIGH);
+        led_pins.set_mode_later(3, LedMode::LOW, 100);
 
-        // println!("{:#?}", led_pins);
-
-        panic!();
+        println!("{:#?}", led_pins);
     }
 
-    // #[test]
-    // fn test1() {
-    //     let mut scheduler = MockScheduler::new();
-    //     let mut led_pins: LedPins<u32, u32, MockLed, MockScheduler> = LedPins::init(
-    //         MockLed::new(),
-    //         MockLed::new(),
-    //         MockLed::new(),
-    //         MockLed::new(),
-    //         &mut scheduler,
-    //     );
+    #[test]
+    fn test1() {
+        let mut led_pins: LedPins<u32, u32, MockLed, MockScheduler> = LedPins::init(
+            MockLed::new(),
+            MockLed::new(),
+            MockLed::new(),
+            MockLed::new(),
+            MockScheduler::new(),
+        );
 
-    //     led_pins.set_led_mode(0, LedMode::BLINK);
-    //     assert_eq!(
-    //         led_pins.queue.peek(),
-    //         Some(ScheduledPinsCommand {
-    //             schedule: 250,
-    //             led_num: 0,
-    //             command: Command::ChangeLedStatus(LedStatus::HIGH) // FIXME 挙動変わった
-    //         })
-    //         .as_ref()
-    //     );
+        led_pins.set_led_mode(0, LedMode::BLINK);
+        assert_eq!(led_pins.leds[0].get_status(), LedStatus::HIGH);
+        assert_eq!(
+            led_pins.queue.peek(),
+            Some(ScheduledPinsCommand {
+                schedule: 250,
+                led_num: 0,
+                command: Command::ChangeLedStatus(LedStatus::LOW)
+            })
+            .as_ref()
+        );
 
-    //     led_pins.handle_schedule();
-    //     assert_eq!(led_pins.leds[0].get_status(), LedStatus::LOW);
+        led_pins.handle_schedule();
+        assert_eq!(led_pins.leds[0].get_status(), LedStatus::HIGH);
 
-    //     led_pins.scheduler().counter = 250;
-    //     led_pins.handle_schedule();
-    //     assert_eq!(led_pins.leds[0].get_status(), LedStatus::HIGH);
+        led_pins.scheduler.counter = 250;
+        led_pins.handle_schedule();
+        assert_eq!(led_pins.leds[0].get_status(), LedStatus::LOW);
 
-    //     led_pins.scheduler().counter = 499;
-    //     led_pins.handle_schedule();
-    //     assert_eq!(led_pins.leds[0].get_status(), LedStatus::HIGH);
+        led_pins.scheduler.counter = 499;
+        led_pins.handle_schedule();
+        assert_eq!(led_pins.leds[0].get_status(), LedStatus::LOW);
 
-    //     led_pins.scheduler().counter = 500;
-    //     led_pins.handle_schedule();
-    //     assert_eq!(led_pins.leds[0].get_status(), LedStatus::LOW);
-    //     assert_eq!(
-    //         led_pins.queue.peek(),
-    //         Some(ScheduledPinsCommand {
-    //             schedule: 750,
-    //             led_num: 0,
-    //             command: Command::ChangeLedStatus(LedStatus::HIGH)
-    //         })
-    //         .as_ref()
-    //     );
+        led_pins.scheduler.counter = 500;
+        led_pins.handle_schedule();
+        assert_eq!(led_pins.leds[0].get_status(), LedStatus::HIGH);
+        assert_eq!(
+            led_pins.queue.peek(),
+            Some(ScheduledPinsCommand {
+                schedule: 750,
+                led_num: 0,
+                command: Command::ChangeLedStatus(LedStatus::LOW)
+            })
+            .as_ref()
+        );
 
-    //     // BLINKモードからLOWモードに変える
-    //     led_pins.scheduler().counter = 501;
-    //     led_pins.set_led_mode(0, LedMode::LOW);
-    //     assert_eq!(led_pins.leds[0].get_status(), LedStatus::LOW);
+        // BLINKモードからHIGHモードに変える
+        led_pins.scheduler.counter = 501;
+        led_pins.set_led_mode(0, LedMode::HIGH);
+        assert_eq!(led_pins.leds[0].get_status(), LedStatus::HIGH);
 
-    //     // BLINKモードの時のHIGHのスケジュールは無視され、LOWのままになる
-    //     assert_eq!(
-    //         led_pins.queue.peek(),
-    //         Some(ScheduledPinsCommand {
-    //             schedule: 750,
-    //             led_num: 0,
-    //             command: Command::ChangeLedStatus(LedStatus::HIGH)
-    //         })
-    //         .as_ref()
-    //     );
-    //     led_pins.scheduler().counter = 750;
-    //     println!("{:#?}", led_pins);
-    //     led_pins.handle_schedule();
-    //     assert_eq!(led_pins.leds[0].get_status(), LedStatus::LOW);
+        // BLINKモードの時のLOWのスケジュールは無視され、HIGHのままになる
+        assert_eq!(
+            led_pins.queue.peek(),
+            Some(ScheduledPinsCommand {
+                schedule: 750,
+                led_num: 0,
+                command: Command::ChangeLedStatus(LedStatus::LOW)
+            })
+            .as_ref()
+        );
+        led_pins.scheduler.counter = 750;
+        // println!("{:#?}", led_pins);
+        assert_eq!(led_pins.leds[0].get_status(), LedStatus::HIGH);
 
-    //     // todo!("some test yet implemented")
-    // }
+        // todo!("some test yet implemented")
+    }
 }

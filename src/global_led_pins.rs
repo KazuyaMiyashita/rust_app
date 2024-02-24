@@ -2,6 +2,9 @@ use bsp::hal::fugit::ExtU32;
 use bsp::hal::{gpio, pac, pac::interrupt};
 use core::cell::RefCell;
 use critical_section::Mutex;
+use defmt::info;
+use defmt::{Debug2Format, Format};
+
 use embedded_hal::digital::v2::OutputPin;
 use fugit::MicrosDurationU32;
 use rp_pico as bsp;
@@ -17,7 +20,7 @@ type LedPin = gpio::Pin<gpio::DynPinId, gpio::FunctionSioOutput, gpio::PullDown>
 
 use led_pins::{Duration, Instant, Led, LedMode, LedPins, LedStatus, Scheduler};
 
-#[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Debug)]
 struct PicoInstant(rp_pico::hal::timer::Instant);
 impl Instant for PicoInstant {
     fn add_millis(&self, millis: u32) -> Self {
@@ -25,7 +28,7 @@ impl Instant for PicoInstant {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct PicoDuration(fugit::MicrosDurationU32);
 impl Duration for PicoDuration {
     fn from_millis(millis: u32) -> Self {
@@ -50,6 +53,12 @@ impl Led for PicoLed {
     }
 }
 
+impl core::fmt::Debug for PicoLed {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "PicoLed(...)")
+    }
+}
+
 use rp_pico::hal::timer::Alarm as _;
 struct PicoScheduler {
     timer: rp_pico::hal::Timer,
@@ -71,6 +80,12 @@ impl Scheduler<PicoInstant, PicoDuration> for PicoScheduler {
     }
     fn clear_interrupt(&mut self) {
         self.alarm.clear_interrupt()
+    }
+}
+
+impl core::fmt::Debug for PicoScheduler {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "PicoScheduler(...)")
     }
 }
 
@@ -120,6 +135,17 @@ pub fn set_mode_later(led_num: usize, led_mode: LedMode, countdown: MicrosDurati
         let mut binding = GLOBAL_LED_PINS_COMPONENT.borrow(cs).borrow_mut();
         let component = binding.as_mut().unwrap();
         component.set_mode_later(led_num, led_mode, PicoDuration(countdown))
+    })
+}
+
+#[derive(Format)]
+struct DebugLedPins<'a>(#[defmt(Debug2Format)] &'a GlobalLedPins);
+
+pub fn debug_print() {
+    critical_section::with(|cs| {
+        let mut binding = GLOBAL_LED_PINS_COMPONENT.borrow(cs).borrow_mut();
+        let component = binding.as_mut().unwrap();
+        info!("{}", DebugLedPins(component));
     })
 }
 

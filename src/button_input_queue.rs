@@ -78,9 +78,9 @@ impl ButtonInterrupts {
     fn on_button_edge_high(&mut self, button_input: ButtonInput) {
         let now: fugit::Instant<u64, 1, 1000000> = self.timer.get_counter();
 
-        let is_schedule_empty_or_old = [
-            self.button0, self.button1, self.button2, self.button3
-        ].iter().any(|b| b.is_none() || b.map_or(false, |t| t < now));
+        let is_schedule_empty_or_old = [self.button0, self.button1, self.button2, self.button3]
+            .iter()
+            .any(|b| b.is_none() || b.map_or(false, |t| t < now));
 
         if is_schedule_empty_or_old {
             match button_input {
@@ -102,7 +102,7 @@ impl ButtonInterrupts {
             (ButtonInput::Button2, self.button2),
             (ButtonInput::Button3, self.button3),
         ];
-        buttons.sort_by(|a, b| a.1.cmp(&b.1)); 
+        buttons.sort_by(|a, b| a.1.cmp(&b.1));
         // Noneは小さい扱い
 
         let mut maybe_current_button = None;
@@ -110,8 +110,12 @@ impl ButtonInterrupts {
 
         for (b, maybe_time) in buttons {
             if let Some(time) = maybe_time {
-                if maybe_next_time.is_none() && maybe_current_button.is_some() { maybe_next_time = Some(time) }
-                if maybe_current_button.is_none() { maybe_current_button = Some(b) }
+                if maybe_next_time.is_none() && maybe_current_button.is_some() {
+                    maybe_next_time = Some(time)
+                }
+                if maybe_current_button.is_none() {
+                    maybe_current_button = Some(b)
+                }
             }
         }
 

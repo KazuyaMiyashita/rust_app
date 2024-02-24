@@ -140,6 +140,8 @@ fn main() -> ! {
     console.clear().unwrap();
 
     let mut status = [false; 4];
+
+    let mut i = 100;
     loop {
         let pushed_buttons = ButtonInputQueue::pop_all();
         if pushed_buttons.contains(&ButtonInput::Button0) {
@@ -179,6 +181,11 @@ fn main() -> ! {
             }
             status[3] = !status[3];
         }
+
+        if i == 0 {
+            GlobalLedPins::debug_print();
+        }
+        i = (i + 1) % 10;
 
         // info!("{:02}{:02}{:02}{:02}", counter[0], counter[1], counter[2], counter[3]);
         // writeln!(

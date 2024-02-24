@@ -26,8 +26,8 @@ rustflags = [
 ]
 
 [build]
-# target = "thumbv6m-none-eabi"
-target = "x86_64-apple-darwin"
+target = "thumbv6m-none-eabi"
+# target = "x86_64-apple-darwin"
 
 [env]
 DEFMT_LOG = "debug"
