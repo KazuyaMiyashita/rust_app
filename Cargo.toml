@@ -1,5 +1,5 @@
 [workspace]
-members = ["led_pins", "fixed_size_priority_queue"]
+members = ["fixed_size_priority_queue"]
 
 [package]
 edition = "2021"
@@ -26,8 +26,6 @@ alloc-cortex-m = "0.4.4"
 critical-section = "1.1.1"
 
 fixed_size_priority_queue = { path = "./fixed_size_priority_queue" }
-
-led_pins = { path = "./led_pins" }
 
 # but you can use any BSP. Uncomment this to use the pro_micro_rp2040 BSP instead
 # sparkfun-pro-micro-rp2040 = "0.7"

@@ -34,8 +34,7 @@ extern crate alloc;
 
 use crate::button_input_queue::ButtonInput;
 use button_input_queue::ButtonInputQueue;
-use global_led_pins as GlobalLedPins;
-use led_pins::LedMode;
+use global_led_pins::LedMode;
 
 // Pin types quickly become very long!
 // We'll create some type aliases using `type` to help with that
@@ -117,7 +116,7 @@ fn main() -> ! {
         timer.alarm_0().unwrap(),
     );
 
-    GlobalLedPins::init(
+    global_led_pins::init(
         pins.gpio13.into_push_pull_output(),
         pins.gpio12.into_push_pull_output(),
         pins.gpio11.into_push_pull_output(),
@@ -130,8 +129,8 @@ fn main() -> ! {
     writeln!(console, "Hello!").unwrap();
 
     for i in 0..=3 {
-        GlobalLedPins::set_led_mode(i, LedMode::HIGH);
-        GlobalLedPins::set_mode_later(i, LedMode::LOW, 500.millis());
+        global_led_pins::set_led_mode(i, LedMode::HIGH);
+        global_led_pins::set_mode_later(i, LedMode::LOW, 500.millis());
     }
     for _ in 0..=7 {
         write!(console, ".").unwrap();
@@ -141,59 +140,45 @@ fn main() -> ! {
 
     let mut status = [false; 4];
 
-    let mut i = 100;
     loop {
         let pushed_buttons = ButtonInputQueue::pop_all();
         if pushed_buttons.contains(&ButtonInput::Button0) {
             if status[0] {
                 writeln!(console, "Stop B0").unwrap();
-                GlobalLedPins::set_led_mode(0, LedMode::LOW);
+                global_led_pins::set_led_mode(0, LedMode::LOW);
             } else {
                 writeln!(console, "Start B0").unwrap();
-                GlobalLedPins::set_led_mode(0, LedMode::BLINK);
+                global_led_pins::set_led_mode(0, LedMode::BLINK);
             }
             status[0] = !status[0];
         } else if pushed_buttons.contains(&ButtonInput::Button1) {
             if status[1] {
                 writeln!(console, "Stop B1").unwrap();
-                GlobalLedPins::set_led_mode(1, LedMode::LOW);
+                global_led_pins::set_led_mode(1, LedMode::LOW);
             } else {
                 writeln!(console, "Start B1").unwrap();
-                GlobalLedPins::set_led_mode(1, LedMode::BLINK);
+                global_led_pins::set_led_mode(1, LedMode::BLINK);
             }
             status[1] = !status[1];
         } else if pushed_buttons.contains(&ButtonInput::Button2) {
             if status[2] {
                 writeln!(console, "Stop B2").unwrap();
-                GlobalLedPins::set_led_mode(2, LedMode::LOW);
+                global_led_pins::set_led_mode(2, LedMode::LOW);
             } else {
                 writeln!(console, "Start B2").unwrap();
-                GlobalLedPins::set_led_mode(2, LedMode::BLINK);
+                global_led_pins::set_led_mode(2, LedMode::BLINK);
             }
             status[2] = !status[2];
         } else if pushed_buttons.contains(&ButtonInput::Button3) {
             if status[3] {
                 writeln!(console, "Stop B3").unwrap();
-                GlobalLedPins::set_led_mode(3, LedMode::LOW);
+                global_led_pins::set_led_mode(3, LedMode::LOW);
             } else {
                 writeln!(console, "Start B3").unwrap();
-                GlobalLedPins::set_led_mode(3, LedMode::BLINK);
+                global_led_pins::set_led_mode(3, LedMode::BLINK);
             }
             status[3] = !status[3];
         }
-
-        if i == 0 {
-            GlobalLedPins::debug_print();
-        }
-        i = (i + 1) % 10;
-
-        // info!("{:02}{:02}{:02}{:02}", counter[0], counter[1], counter[2], counter[3]);
-        // writeln!(
-        //     console,
-        //     "{:2}{:2}{:2}{:2}",
-        //     counter[0], counter[1], counter[2], counter[3]
-        // )
-        // .unwrap();
 
         timer.delay_ms(10);
         // interrupts handle everything else in this example.
