@@ -105,6 +105,8 @@ where
     L: Led,
     S: Scheduler<I, D>,
 {
+    const BLINK_MILLIS: u32 = 100;
+
     pub fn init(led0: L, led1: L, led2: L, led3: L, scheduler: S) -> Self {
         LedPins {
             leds: [led0, led1, led2, led3],
@@ -121,7 +123,9 @@ where
         }
         if let Some(next) = self._change_mode(led_num, led_mode) {
             self.queue.push(next);
-            self.scheduler.schedule_at(next.schedule)
+            if self.scheduler.finished() {
+                self.scheduler.schedule_at(next.schedule);
+            }
         }
     }
 
@@ -162,7 +166,7 @@ where
             LedMode::BLINK => {
                 self.leds[led_num].set_status(LedStatus::HIGH);
                 Some(ScheduledPinsCommand {
-                    schedule: self.scheduler.get_counter().add_millis(250),
+                    schedule: self.scheduler.get_counter().add_millis(Self::BLINK_MILLIS),
                     led_num,
                     command: Command::ChangeLedStatus(LedStatus::LOW),
                 })
@@ -187,14 +191,14 @@ where
                 if pin == LedStatus::HIGH {
                     self.leds[led_num].set_status(LedStatus::HIGH);
                     Some(ScheduledPinsCommand {
-                        schedule: self.scheduler.get_counter().add_millis(250),
+                        schedule: self.scheduler.get_counter().add_millis(Self::BLINK_MILLIS),
                         led_num,
                         command: Command::ChangeLedStatus(LedStatus::LOW),
                     })
                 } else {
                     self.leds[led_num].set_status(LedStatus::LOW);
                     Some(ScheduledPinsCommand {
-                        schedule: self.scheduler.get_counter().add_millis(250),
+                        schedule: self.scheduler.get_counter().add_millis(Self::BLINK_MILLIS),
                         led_num,
                         command: Command::ChangeLedStatus(LedStatus::HIGH),
                     })
